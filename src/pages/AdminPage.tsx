@@ -585,12 +585,8 @@ for (const [index, image] of images.entries()) {
     `جارٍ رفع الصورة ${index + 1} من ${images.length}: ${image.name}`
   )
 
-  let uploadedPath: string | null = null
-
   try {
     const uploaded = await uploadImage(image, productId)
-
-    uploadedPath = uploaded.path
 
     const { error: imageError } = await supabase
       .from('product_images')

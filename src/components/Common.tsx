@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Facebook, Heart, Home, Instagram, Menu, MessageCircle, Moon, Search, ShoppingBag, Sun, UserRound, X } from 'lucide-react'
+import { ArrowLeft, Facebook, Heart, Home, Instagram, Menu, Moon, Search, ShoppingBag, Sun, UserRound, X } from 'lucide-react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { readCart, subscribeToCart } from '../lib/cart'
 
