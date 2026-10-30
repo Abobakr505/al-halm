@@ -94,7 +94,7 @@ export function SiteHeader() {
   const closeMenu = () => setMenuOpen(false)
 
   return <>
-    <div className="announcement">تفاصيل صغيرة، أناقة تدوم <span>✦</span> شحن لجميع مناطق المملكة</div>
+    <div className="announcement">تفاصيل صغيرة، أناقة تدوم <span>✦</span> شحن لجميع مناطق مصر</div>
     <header className="site-header">
       <button className="icon-button mobile-menu" aria-label={menuOpen ? 'إغلاق القائمة' : 'فتح القائمة'} aria-expanded={menuOpen} aria-controls="primary-navigation" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
       <Link className="brand" to="/" aria-label="متجر الحلم الرئيسية" onClick={closeMenu}><span className="Zain brand-mark"><img className="brand-icon rounded-full" src="/logo.webp"  alt="" /></span><span className="Zain brand-name">الحلم<small>عبايات بتفاصيل تليق بك</small></span></Link>
