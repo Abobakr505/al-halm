@@ -97,7 +97,7 @@ export function SiteHeader() {
     <div className="announcement">تفاصيل صغيرة، أناقة تدوم <span>✦</span> شحن لجميع مناطق المملكة</div>
     <header className="site-header">
       <button className="icon-button mobile-menu" aria-label={menuOpen ? 'إغلاق القائمة' : 'فتح القائمة'} aria-expanded={menuOpen} aria-controls="primary-navigation" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
-      <Link className="brand" to="/" aria-label="متجر الحلم الرئيسية" onClick={closeMenu}><span className="Zain brand-mark"><img className="brand-icon rounded-full" src="/logo.png"  alt="" /></span><span className="Zain brand-name">الحلم<small>عبايات بتفاصيل تليق بك</small></span></Link>
+      <Link className="brand" to="/" aria-label="متجر الحلم الرئيسية" onClick={closeMenu}><span className="Zain brand-mark"><img className="brand-icon rounded-full" src="/logo.webp"  alt="" /></span><span className="Zain brand-name">الحلم<small>عبايات بتفاصيل تليق بك</small></span></Link>
       <nav id="primary-navigation" className={menuOpen ? 'main-nav open' : 'main-nav'}>
         <Link to="/" onClick={closeMenu}>الرئيسية</Link><Link to="/products" onClick={closeMenu}>العبايات</Link><Link to="/categories" onClick={closeMenu}>الأقسام</Link><Link to="/about" onClick={closeMenu}>قصتنا</Link>
       </nav>
@@ -129,7 +129,7 @@ export function SiteFooter() {
   const whatsappNumber = contact?.phone.replace(/\D/g, '').replace(/^00/, '').replace(/^0/, '20')
   const whatsappHref = whatsappNumber ? `https://wa.me/${whatsappNumber}` : '/contact'
   return <><footer className="site-footer"><div className="footer-main">
-    <div className="footer-brand"><Link className="brand" to="/"><span className="brand-mark"><img className="brand-icon rounded-full" src="/logo.png"  alt="" /></span><span className="brand-name">الحلم<small>عبايات بتفاصيل تليق بك</small></span></Link><p>أناقة خليجية، بتفاصيل مختارة من القلب.</p></div>
+    <div className="footer-brand"><Link className="brand" to="/"><span className="brand-mark"><img className="brand-icon rounded-full" src="/logo.webp"  alt="" /></span><span className="brand-name">الحلم<small>عبايات بتفاصيل تليق بك</small></span></Link><p>أناقة خليجية، بتفاصيل مختارة من القلب.</p></div>
     <div><b>تصفحي</b><Link to="/products">كل العبايات</Link><Link to="/categories">الأقسام</Link><Link to="/about">قصتنا</Link></div>
     <div><b>مساعدتك</b><Link to="/contact">تواصلي معنا</Link><Link to="/policies">الشحن والاستبدال</Link><Link to="/account">حسابي</Link></div>
     <div><b>تابعينا</b>{(contact?.instagram || facebookUrl) && <div className="social-links">{contact?.instagram && <a href={contact.instagram} target="_blank" rel="noreferrer" aria-label="إنستغرام"><Instagram size={17} /> إنستغرام</a>}{facebookUrl && <a href={facebookUrl} target="_blank" rel="noreferrer" aria-label="فيسبوك"><Facebook size={17} /> فيسبوك</a>}</div>}{contact?.phone && <a href={`tel:${contact.phone}`}>هاتف المتجر</a>}{contact?.email && <a href={`mailto:${contact.email}`}>{contact.email}</a>}{!contact?.instagram && !facebookUrl && !contact?.phone && !contact?.email && <span className="muted-copy">بيانات التواصل قريبًا</span>}</div>
@@ -154,7 +154,7 @@ export function NotFoundPage() {
       <span className="not-found-orbit not-found-orbit-one" />
       <span className="not-found-orbit not-found-orbit-two" />
       <span className="not-found-number">404</span>
-      <span className="not-found-mark"><img className="brand-icon rounded-full" src="/logo.png"  alt="" /></span>
+      <span className="not-found-mark"><img className="brand-icon rounded-full" src="/logo.webp"  alt="" /></span>
     </div>
     <div className="not-found-copy">
       <p className="eyebrow">يبدو أننا تهنا قليلًا</p>
