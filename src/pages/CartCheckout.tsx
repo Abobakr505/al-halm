@@ -11,17 +11,42 @@ export function CartPage() {
   const [lines, setLines] = useState(readCart)
   const [items, setItems] = useState<{ variantId: string; product: Pick<Product, 'id' | 'name' | 'slug' | 'price'> & Pick<Product, 'images'>; size: string; color: string; stock: number; quantity: number }[]>([])
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (!supabase || lines.length === 0) { setItems([]); return }
-    supabase.from('product_variants').select('id,size,color,stock,product:products(id,name,slug,price,images:product_images(image_url,alt_text,position))').in('id', lines.map((line) => line.variantId)).then(({ data, error: resultError }) => {
-      if (resultError) setError(`تعذر تحميل السلة: ${resultError.message}`)
-      else setItems((data ?? []).flatMap((variant) => {
-        const product = variant.product[0]
-        const line = lines.find((item) => item.variantId === variant.id)
-        return product && line ? [{ variantId: variant.id, product, size: variant.size, color: variant.color, stock: variant.stock, quantity: line.quantity }] : []
-      }))
-    })
+    if (!supabase || lines.length === 0) { setItems([]); setError(''); setLoading(false); return }
+
+    let active = true
+    setLoading(true)
+    setError('')
+    void (async () => {
+      try {
+        const { data, error: resultError } = await supabase
+          .from('product_variants')
+          .select('id,size,color,stock,product:products(id,name,slug,price,images:product_images(image_url,alt_text,position))')
+          .in('id', lines.map((line) => line.variantId))
+
+        if (!active) return
+        if (resultError) {
+          setError(`تعذر تحميل السلة: ${resultError.message}`)
+          setItems([])
+        } else {
+          setItems((data ?? []).flatMap((variant) => {
+            const product = Array.isArray(variant.product) ? variant.product[0] : variant.product
+            const line = lines.find((item) => item.variantId === variant.id)
+            return product && line ? [{ variantId: variant.id, product, size: variant.size, color: variant.color, stock: variant.stock, quantity: line.quantity }] : []
+          }))
+        }
+      } catch (cause) {
+        if (!active) return
+        setError(`تعذر تحميل السلة: ${cause instanceof Error ? cause.message : 'حدث خطأ غير معروف.'}`)
+        setItems([])
+      } finally {
+        if (active) setLoading(false)
+      }
+    })()
+
+    return () => { active = false }
   }, [lines])
 
   const updateQuantity = (variantId: string, quantity: number) => {
@@ -31,7 +56,7 @@ export function CartPage() {
   }
   const subtotal = items.reduce((total, item) => total + item.product.price * item.quantity, 0)
 
-  return <main className="page-main narrow-page"><div className="page-title"><p className="eyebrow">اختياراتك</p><h1>سلة الحلم</h1></div>{error ? <EmptyState title="تعذر تحميل السلة" message={error} /> : items.length === 0 ? <EmptyState title="سلتك فارغة الآن" message={isSupabaseConfigured ? 'القطعة المناسبة بانتظارك. اكتشفي مجموعتنا واختاري ما يشبهك.' : 'اربط Supabase ثم أضيفي خيارات المنتجات المتاحة إلى سلتك.'} action="/products" actionText="اكتشفي العبايات" /> : <><div className="cart-list">{items.map((item) => <div className="cart-item" key={item.variantId}><img src={item.product.images?.[0]?.image_url || categoryFallback(0)} alt={item.product.name} /><div className="cart-item-info"><h3>{item.product.name}</h3><span>{item.color} · مقاس {item.size}</span><b>{money(item.product.price)}</b><div className="quantity-control"><button aria-label="تقليل الكمية" onClick={() => updateQuantity(item.variantId, item.quantity - 1)}>−</button><span>{item.quantity}</span><button aria-label="زيادة الكمية" disabled={item.quantity >= item.stock} onClick={() => updateQuantity(item.variantId, item.quantity + 1)}>+</button></div></div><button className="remove-line" onClick={() => updateQuantity(item.variantId, 0)}>حذف</button></div>)}</div><div className="cart-summary"><div><span>المجموع الفرعي</span><b>{money(subtotal)}</b></div><p>تُحسب تكلفة التوصيل والعربون عند إتمام الطلب.</p><Link className="button button-dark full-button" to="/checkout">إتمام الطلب <ArrowLeft size={16} /></Link></div></>}</main>
+  return <main className="page-main narrow-page"><div className="page-title"><p className="eyebrow">اختياراتك</p><h1>سلة الحلم</h1></div>{error ? <EmptyState title="تعذر تحميل السلة" message={error} /> : loading ? <div className="loading-message">جارٍ تحميل محتويات السلة…</div> : items.length === 0 ? <EmptyState title="سلتك فارغة الآن" message={isSupabaseConfigured ? lines.length ? 'تعذر العثور على تفاصيل المنتجات المحفوظة في السلة. أزيلي العناصر القديمة ثم أضيفيها من جديد.' : 'القطعة المناسبة بانتظارك. اكتشفي مجموعتنا واختاري ما يشبهك.' : 'اربط Supabase ثم أضيفي خيارات المنتجات المتاحة إلى سلتك.'} action="/products" actionText="اكتشفي العبايات" /> : <><div className="cart-list">{items.map((item) => <div className="cart-item" key={item.variantId}><img src={item.product.images?.[0]?.image_url || categoryFallback(0)} alt={item.product.name} /><div className="cart-item-info"><h3>{item.product.name}</h3><span>{item.color} · مقاس {item.size}</span><b>{money(item.product.price)}</b><div className="quantity-control"><button aria-label="تقليل الكمية" onClick={() => updateQuantity(item.variantId, item.quantity - 1)}>−</button><span>{item.quantity}</span><button aria-label="زيادة الكمية" disabled={item.quantity >= item.stock} onClick={() => updateQuantity(item.variantId, item.quantity + 1)}>+</button></div></div><button className="remove-line" onClick={() => updateQuantity(item.variantId, 0)}>حذف</button></div>)}</div><div className="cart-summary"><div><span>المجموع الفرعي</span><b>{money(subtotal)}</b></div><p>تُحسب تكلفة التوصيل والعربون عند إتمام الطلب.</p><Link className="button button-dark full-button" to="/checkout">إتمام الطلب <ArrowLeft size={16} /></Link></div></>}</main>
 }
 
 export function CheckoutPage() {
@@ -55,7 +80,10 @@ export function CheckoutPage() {
     })
     if (cart.length) supabase.from('product_variants').select('id,product:products(price)').in('id', cart.map((line) => line.variantId)).then(({ data, error }) => {
       if (error) setMessage(`تعذر تحميل ملخص الطلب: ${error.message}`)
-      else setSubtotal((data ?? []).reduce((total, item) => total + Number(item.product[0]?.price || 0) * (cart.find((line) => line.variantId === item.id)?.quantity || 0), 0))
+      else setSubtotal((data ?? []).reduce((total, item) => {
+        const product = Array.isArray(item.product) ? item.product[0] : item.product
+        return total + Number(product?.price || 0) * (cart.find((line) => line.variantId === item.id)?.quantity || 0)
+      }, 0))
     })
   }, [])
 

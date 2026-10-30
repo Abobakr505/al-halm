@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Heart, Instagram, Menu, Moon, Search, ShoppingBag, Sun, UserRound, X } from 'lucide-react'
+import { ArrowLeft, Facebook, Heart, Home, Instagram, Menu, MessageCircle, Moon, Search, ShoppingBag, Sun, UserRound, X } from 'lucide-react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { readCart, subscribeToCart } from '../lib/cart'
 
@@ -31,16 +31,15 @@ export function SiteHeader() {
     <div className="announcement">تفاصيل صغيرة، أناقة تدوم <span>✦</span> شحن لجميع مناطق المملكة</div>
     <header className="site-header">
       <button className="icon-button mobile-menu" aria-label={menuOpen ? 'إغلاق القائمة' : 'فتح القائمة'} aria-expanded={menuOpen} aria-controls="primary-navigation" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
-      <Link className="brand" to="/" aria-label="متجر الحلم الرئيسية" onClick={closeMenu}><span className="Zain brand-mark">ح</span><span className="Zain brand-name">الحلم<small>عبايات بتفاصيل تليق بك</small></span></Link>
+      <Link className="brand" to="/" aria-label="متجر الحلم الرئيسية" onClick={closeMenu}><span className="Zain brand-mark"><img className="brand-icon rounded-full" src="/logo.png"  alt="" /></span><span className="Zain brand-name">الحلم<small>عبايات بتفاصيل تليق بك</small></span></Link>
       <nav id="primary-navigation" className={menuOpen ? 'main-nav open' : 'main-nav'}>
         <Link to="/" onClick={closeMenu}>الرئيسية</Link><Link to="/products" onClick={closeMenu}>العبايات</Link><Link to="/categories" onClick={closeMenu}>الأقسام</Link><Link to="/about" onClick={closeMenu}>قصتنا</Link>
       </nav>
       <div className="header-actions">
-        <Link className="icon-button" to="/search" aria-label="البحث"><Search /></Link>
         <Link className="icon-button favorite-link" to="/favorites" aria-label="المفضلة"><Heart /></Link>
         <Link className="icon-button account-link" to="/account" aria-label="حسابي"><UserRound /></Link>
         <button className="icon-button" onClick={() => setDark(!dark)} aria-label={dark ? 'الوضع الفاتح' : 'الوضع الداكن'}>{dark ? <Sun /> : <Moon />}</button>
-        <Link className="icon-button bag-button" to="/cart" aria-label="سلة التسوق"><ShoppingBag />{cartCount > 0 && <span className="bag-count">{cartCount}</span>}</Link>
+        <Link className="icon-button bag-button" to="/cart" aria-label={`سلة التسوق، ${cartCount} منتجات`}><ShoppingBag />{cartCount > 0 && <span className="bag-count" aria-hidden="true">{cartCount > 99 ? '99+' : cartCount}</span>}</Link>
       </div>
     </header>
     {!isSupabaseConfigured && <div className="config-banner">اربط المشروع بـ Supabase لإظهار المنتجات وتفعيل الطلبات والحسابات. <a href="/README.md" target="_blank" rel="noreferrer">طريقة الإعداد</a></div>}
@@ -49,19 +48,30 @@ export function SiteHeader() {
 
 export function SiteFooter() {
   const [contact, setContact] = useState<{ phone: string; email: string; instagram: string } | null>(null)
+  const [facebookUrl, setFacebookUrl] = useState('')
   useEffect(() => {
     if (!supabase) return
     supabase.from('store_settings').select('contact_phone,contact_email,instagram_url').eq('id', true).single().then(({ data, error }) => {
       if (error) console.error('تعذر تحميل بيانات التواصل في التذييل:', error.message)
       else setContact({ phone: data.contact_phone, email: data.contact_email, instagram: data.instagram_url })
     })
+    supabase.from('store_settings').select('facebook_url').eq('id', true).single().then(({ data, error }) => {
+      if (error) console.error('تعذر تحميل رابط فيسبوك. تحققي من تطبيق migration إضافة رابط فيسبوك:', error.message)
+      else setFacebookUrl(data.facebook_url)
+    })
   }, [])
-  return <footer className="site-footer"><div className="footer-main">
-    <div className="footer-brand"><Link className="brand" to="/"><span className="brand-mark">ح</span><span className="brand-name">الحلم<small>عبايات بتفاصيل تليق بك</small></span></Link><p>أناقة خليجية، بتفاصيل مختارة من القلب.</p></div>
+  const whatsappNumber = contact?.phone.replace(/\D/g, '').replace(/^00/, '').replace(/^0/, '20')
+  const whatsappHref = whatsappNumber ? `https://wa.me/${whatsappNumber}` : '/contact'
+  return <><footer className="site-footer"><div className="footer-main">
+    <div className="footer-brand"><Link className="brand" to="/"><span className="brand-mark"><img className="brand-icon rounded-full" src="/logo.png"  alt="" /></span><span className="brand-name">الحلم<small>عبايات بتفاصيل تليق بك</small></span></Link><p>أناقة خليجية، بتفاصيل مختارة من القلب.</p></div>
     <div><b>تصفحي</b><Link to="/products">كل العبايات</Link><Link to="/categories">الأقسام</Link><Link to="/about">قصتنا</Link></div>
     <div><b>مساعدتك</b><Link to="/contact">تواصلي معنا</Link><Link to="/policies">الشحن والاستبدال</Link><Link to="/account">حسابي</Link></div>
-    <div><b>تابعينا</b>{contact?.instagram && <a href={contact.instagram} target="_blank" rel="noreferrer"><Instagram size={16} /> إنستغرام</a>}{contact?.phone && <a href={`tel:${contact.phone}`}>هاتف المتجر</a>}{contact?.email && <a href={`mailto:${contact.email}`}>{contact.email}</a>}{!contact?.instagram && !contact?.phone && !contact?.email && <span className="muted-copy">بيانات التواصل قريبًا</span>}</div>
+    <div><b>تابعينا</b>{(contact?.instagram || facebookUrl) && <div className="social-links">{contact?.instagram && <a href={contact.instagram} target="_blank" rel="noreferrer" aria-label="إنستغرام"><Instagram size={17} /> إنستغرام</a>}{facebookUrl && <a href={facebookUrl} target="_blank" rel="noreferrer" aria-label="فيسبوك"><Facebook size={17} /> فيسبوك</a>}</div>}{contact?.phone && <a href={`tel:${contact.phone}`}>هاتف المتجر</a>}{contact?.email && <a href={`mailto:${contact.email}`}>{contact.email}</a>}{!contact?.instagram && !facebookUrl && !contact?.phone && !contact?.email && <span className="muted-copy">بيانات التواصل قريبًا</span>}</div>
   </div><div className="footer-bottom"><span>© متجر الحلم — جميع الحقوق محفوظة</span><span>صُنعت بحب وأناقة <Heart size={13} /></span></div></footer>
+    <a className="whatsapp-float" href={whatsappHref} target={whatsappNumber ? '_blank' : undefined} rel={whatsappNumber ? 'noopener noreferrer' : undefined} aria-label={whatsappNumber ? 'تواصلي معنا عبر واتساب' : 'تواصلي مع المتجر لإعداد واتساب'}>    <svg  viewBox="0 0 32 32" aria-hidden="true"  >
+      <path d="M16 .8A15.1 15.1 0 0 0 3 23.6L.9 31l7.6-2A15.2 15.2 0 1 0 16 .8Zm0 27.5a12.3 12.3 0 0 1-6.3-1.7l-.5-.3-4.5 1.2 1.2-4.4-.3-.5A12.4 12.4 0 1 1 16 28.3Zm6.8-9.3c-.4-.2-2.2-1.1-2.6-1.2-.4-.2-.6-.2-.9.2-.3.4-1 1.2-1.2 1.4-.2.3-.5.3-.9.1-.4-.2-1.6-.6-3-1.8-1.1-.9-1.8-2.1-2-2.5-.2-.4 0-.6.2-.8l.6-.7c.2-.2.3-.4.4-.7.1-.2 0-.5 0-.7-.1-.2-.9-2-1.2-2.7-.3-.7-.6-.6-.9-.6h-.8c-.3 0-.7.1-1 .5-.4.4-1.3 1.3-1.3 3.1s1.3 3.6 1.5 3.8c.2.3 2.6 4 6.2 5.4 3.6 1.4 3.6.9 4.3.8.7-.1 2.2-.9 2.5-1.8.3-.9.3-1.7.2-1.8-.1-.2-.4-.3-.8-.5Z"/>
+    </svg><span className="whatsapp-float-label">واتساب</span></a>
+  </>
 }
 
 export function EmptyState({ title, message, action, actionText }: { title: string; message: string; action?: string; actionText?: string }) {
@@ -70,4 +80,24 @@ export function EmptyState({ title, message, action, actionText }: { title: stri
 
 export function InfoPage({ title, text }: { title: string; text: string }) {
   return <main className="page-main narrow-page"><div className="page-title"><p className="eyebrow">متجر الحلم</p><h1>{title}</h1><p>{text}</p></div><Link className="text-link" to="/products">تصفحي العبايات <ArrowLeft size={16} /></Link></main>
+}
+
+export function NotFoundPage() {
+  return <main className="not-found-page">
+    <div className="not-found-art" aria-hidden="true">
+      <span className="not-found-orbit not-found-orbit-one" />
+      <span className="not-found-orbit not-found-orbit-two" />
+      <span className="not-found-number">404</span>
+      <span className="not-found-mark"><img className="brand-icon rounded-full" src="/logo.png"  alt="" /></span>
+    </div>
+    <div className="not-found-copy">
+      <p className="eyebrow">يبدو أننا تهنا قليلًا</p>
+      <h1>هذه الصفحة<br /><em>ليست ضمن الحكاية.</em></h1>
+      <p>الرابط الذي تبحثين عنه غير موجود أو ربما تغيّر. لا بأس، مجموعتنا ما زالت هنا بانتظارك.</p>
+      <div className="not-found-actions">
+        <Link className="button button-dark" to="/"><Home size={17} /> العودة للرئيسية</Link>
+        <Link className="text-link" to="/products">اكتشفي العبايات <Search size={16} /></Link>
+      </div>
+    </div>
+  </main>
 }

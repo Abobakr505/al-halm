@@ -7,7 +7,7 @@
 1. ثبّتي Node.js 20.19+ أو 22.12+.
 2. ثبّتي الحزم: `npm install`.
 3. انسخي `.env.example` إلى `.env.local` وضعي رابط مشروع Supabase و`anon key` العامة.
-4. طبّقي الترحيل `supabase/migrations/20261030000000_initial_schema.sql` على مشروع Supabase.
+4. طبّقي جميع ملفات `supabase/migrations` على مشروع Supabase بالترتيب الزمني؛ يتضمن آخر ترحيل رفع حد صور المنتجات إلى 20 ميجابايت.
 5. شغّلي `npm run dev`، وللتحقق من نسخة الإنتاج استخدمي `npm run build`.
 
 لا تضعي `service_role` key في تطبيق المتصفح. مفتاح `anon` مخصص للواجهة ويخضع كل طلب لسياسات RLS.

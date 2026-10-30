@@ -1,4 +1,5 @@
 export type CartLine = { variantId: string; quantity: number }
+export type CartAddResult = 'added' | 'unavailable' | 'stock-limit'
 
 const storageKey = 'al-hulm-cart'
 const cartEvent = 'al-hulm-cart-change'
@@ -21,6 +22,20 @@ export function writeCart(lines: CartLine[]) {
   localStorage.setItem(storageKey, JSON.stringify(lines))
   window.dispatchEvent(new Event(cartEvent))
   window.dispatchEvent(new Event('al-hulm-cart-count-change'))
+}
+
+export function addCartVariant(variant: { id: string; stock: number }): CartAddResult {
+  if (variant.stock < 1) return 'unavailable'
+
+  const cart = readCart()
+  const existingItem = cart.find((item) => item.variantId === variant.id)
+  if ((existingItem?.quantity ?? 0) + 1 > variant.stock) return 'stock-limit'
+
+  if (existingItem) existingItem.quantity += 1
+  else cart.push({ variantId: variant.id, quantity: 1 })
+
+  writeCart(cart)
+  return 'added'
 }
 
 export function subscribeToCart(callback: () => void) {

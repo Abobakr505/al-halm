@@ -1,12 +1,13 @@
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent, type TouchEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ArrowUpLeft, Check, Heart, Instagram, Search, ShoppingBag, Truck } from 'lucide-react'
+import { ArrowLeft, ArrowUpLeft, Check, ChevronLeft, ChevronRight, Heart, Instagram, Search, ShoppingBag, Truck } from 'lucide-react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import { readCart, writeCart } from '../lib/cart'
+import { setPageMetadata } from '../lib/seo'
+import { addCartVariant } from '../lib/cart'
 import type { Category, Product } from '../types'
 import { EmptyState, InfoPage } from './Common'
 
-export const money = (value: number) => `${new Intl.NumberFormat('ar').format(value)} ر.س`
+export const money = (value: number) => `${new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 2 }).format(value)} ج.م`
 
 export function categoryFallback(index: number) {
   return [
@@ -29,7 +30,7 @@ export function HomePage() {
     if (!supabase) return
     let active = true
     Promise.all([
-      supabase.from('products').select('*, category:categories(name,slug), images:product_images(image_url,alt_text,position)').eq('is_active', true).eq('is_featured', true).order('created_at', { ascending: false }).limit(4),
+      supabase.from('products').select('*, category:categories(name,slug), images:product_images(image_url,alt_text,position), variants:product_variants(id,size,color,stock)').eq('is_active', true).order('is_featured', { ascending: false }).order('created_at', { ascending: false }).limit(4),
       supabase.from('categories').select('id,name,slug,description,image_url').eq('is_active', true).order('position'),
     ]).then(([productResult, categoryResult]) => {
       if (!active) return
@@ -124,7 +125,50 @@ export function ProductsPage() {
 
 export function ProductGrid({ products }: { products: Product[] }) {
   if (!products.length) return <EmptyState title="مساحة تنتظر عبايتك القادمة" message={isSupabaseConfigured ? 'لا توجد منتجات منشورة في هذا القسم حاليًا.' : 'بعد ربط Supabase وإضافة المنتجات، ستجدينها هنا.'} />
-  return <div className="product-grid">{products.map((product) => <Link className="product-card" to={`/products/${product.slug}`} key={product.id}><div className="product-photo">{product.images?.[0]?.image_url ? <img src={product.images[0].image_url} alt={product.images[0].alt_text || product.name} loading="lazy" /> : <div className="no-image">الحلم</div>}<span className="product-badge">{product.is_featured ? 'اختيار الحلم' : 'من مجموعتنا'}</span><FavoriteButton productId={product.id} /><ProductStock product={product} /></div><div className="product-meta"><span>{product.category?.name || 'عبايات الحلم'}</span><span>{product.variants?.length ? 'مقاسات متعددة' : 'تفاصيل أنيقة'}</span></div><h3>{product.name}</h3><div className="product-price">{money(product.price)}{product.compare_at_price && product.compare_at_price > product.price && <del>{money(product.compare_at_price)}</del>}</div></Link>)}</div>
+  return <div className="product-grid">{products.map((product) => <article className="product-card" key={product.id}>
+    <div className="product-photo">
+      <Link to={`/products/${product.slug}`} aria-label={`تفاصيل ${product.name}`}>
+        {product.images?.[0]?.image_url ? <img src={product.images[0].image_url} alt={product.images[0].alt_text || product.name} loading="lazy" /> : <div className="no-image">الحلم</div>}
+        <span className="product-badge">{product.is_featured ? 'اختيار الحلم' : 'من مجموعتنا'}</span>
+      </Link>
+      <FavoriteButton productId={product.id} />
+      <ProductStock product={product} />
+    </div>
+    <Link className="product-card-info" to={`/products/${product.slug}`}>
+      <div className="product-meta"><span>{product.category?.name || 'عبايات الحلم'}</span><span>{product.variants?.length ? 'مقاسات متعددة' : 'تفاصيل أنيقة'}</span></div>
+      <h3>{product.name}</h3>
+      <div className="product-price">{money(product.price)}{product.compare_at_price && product.compare_at_price > product.price && <del>{money(product.compare_at_price)}</del>}</div>
+    </Link>
+    <ProductQuickAdd product={product} />
+  </article>)}</div>
+}
+
+function ProductQuickAdd({ product }: { product: Product }) {
+  const [message, setMessage] = useState('')
+  const availableVariants = product.variants?.filter((variant) => variant.stock > 0) ?? []
+
+  if (availableVariants.length !== 1) {
+    return availableVariants.length === 0
+      ? <button className="quick-add" disabled>نفد المخزون</button>
+      : <Link className="quick-add" to={`/products/${product.slug}`}>اختاري اللون والمقاس <ArrowLeft size={15} /></Link>
+  }
+
+  const add = () => {
+    setMessage('')
+    try {
+      const result = addCartVariant(availableVariants[0])
+      if (result === 'added') setMessage('تمت الإضافة إلى السلة')
+      else if (result === 'stock-limit') setMessage(`الكمية المتاحة ${availableVariants[0].stock} فقط`)
+      else setMessage('نفد المخزون')
+    } catch (error) {
+      setMessage(error instanceof Error ? `تعذر حفظ السلة: ${error.message}` : 'تعذر حفظ السلة.')
+    }
+  }
+
+  return <div className="quick-add-wrap">
+    <button className="quick-add" onClick={add}>{message === 'تمت الإضافة إلى السلة' ? <Check size={15} /> : <ShoppingBag size={15} />}{message === 'تمت الإضافة إلى السلة' ? message : 'أضيفي إلى السلة'}</button>
+    {message && message !== 'تمت الإضافة إلى السلة' && <span className="quick-add-message" role="status">{message}</span>}
+  </div>
 }
 
 function ProductStock({ product }: { product: Product }) {
@@ -168,40 +212,202 @@ function FavoriteButton({ productId }: { productId: string }) {
 export function ProductDetailsPage() {
   const { slug } = useParams()
   const [product, setProduct] = useState<Product | null>(null)
+  const [loading, setLoading] = useState(true)
   const [size, setSize] = useState('')
   const [color, setColor] = useState('')
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [imageIndex, setImageIndex] = useState(0)
   const [zoomOpen, setZoomOpen] = useState(false)
+  const touchStartX = useRef<number | null>(null)
+  const lastGallerySwipe = useRef(0)
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (!supabase || !slug) return
-    supabase.from('products').select('*, category:categories(name,slug), images:product_images(id,image_url,alt_text,position), variants:product_variants(id,size,color,stock)').eq('slug', slug).eq('is_active', true).order('position', { foreignTable: 'product_images' }).maybeSingle().then(({ data, error: resultError }) => {
-      if (resultError) setError('تعذر تحميل تفاصيل العباية.')
-      else setProduct(data as Product | null)
+    if (!product) return
+    const description = product.description?.trim() || `اكتشفي ${product.name} من عبايات متجر الحلم. تصميم أنيق بخامات وتفاصيل مختارة بعناية.`
+    setPageMetadata({
+      title: `${product.name} | متجر الحلم`,
+      description: description.slice(0, 300),
+      url: `${window.location.origin}/products/${product.slug}`,
+      image: product.images?.[0]?.image_url,
+      structuredData: {
+        '@context': 'https://schema.org',
+        '@type': 'Product',
+        name: product.name,
+        description,
+        image: product.images?.map((image) => image.image_url).filter(Boolean),
+        category: product.category?.name || 'عبايات',
+        offers: {
+          '@type': 'Offer',
+          priceCurrency: 'EGP',
+          price: product.price,
+          availability: product.variants?.some((variant) => variant.stock > 0) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+          url: `${window.location.origin}/products/${product.slug}`,
+        },
+      },
     })
+  }, [product])
+
+  useEffect(() => {
+    if (!supabase || !slug) return
+    let active = true
+    setLoading(true)
+    setLoadError('')
+    setProduct(null)
+    setImageIndex(0)
+
+    void (async () => {
+      try {
+        const { data, error: resultError } = await supabase
+          .from('products')
+          .select('*, category:categories(name,slug), images:product_images(id,image_url,alt_text,position), variants:product_variants(id,size,color,stock)')
+          .eq('slug', slug)
+          .eq('is_active', true)
+          .order('position', { referencedTable: 'images' })
+          .maybeSingle()
+
+        if (!active) return
+        if (resultError) setLoadError(`تعذر تحميل تفاصيل العباية: ${resultError.message}`)
+        else setProduct(data as Product | null)
+      } catch (cause) {
+        if (!active) return
+        setLoadError(`تعذر تحميل تفاصيل العباية: ${cause instanceof Error ? cause.message : 'حدث خطأ غير معروف.'}`)
+      } finally {
+        if (active) setLoading(false)
+      }
+    })()
+
+    return () => { active = false }
   }, [slug])
 
   if (!isSupabaseConfigured) return <InfoPage title="تفاصيل عبايتك" text="أضيفي بيانات اتصال Supabase لعرض المنتجات." />
-  if (error) return <InfoPage title="تعذر تحميل المنتج" text={error} />
+  if (loadError) return <InfoPage title="تعذر تحميل المنتج" text={loadError} />
+  if (loading) return <main className="page-main"><div className="loading-message">جارٍ تحميل تفاصيل العباية…</div></main>
   if (!product) return <InfoPage title="عبايتك في الطريق" text="لم نعثر على هذه العباية أو أنها غير متاحة حاليًا." />
   const colors = [...new Set((product.variants ?? []).map((variant) => variant.color))]
   const sizes = [...new Set((product.variants ?? []).filter((variant) => !color || variant.color === color).map((variant) => variant.size))]
   const addToCart = () => {
-    if (!size || !color) { setError('اختاري اللون والمقاس أولًا.'); return }
-    const cart = readCart()
-    const variantId = product.variants?.find((variant) => variant.size === size && variant.color === color)?.id
-    if (!variantId) { setError('هذا الخيار غير متاح حاليًا.'); return }
-    if ((product.variants?.find((variant) => variant.id === variantId)?.stock || 0) < 1) { setError('نفد مخزون هذا الخيار. اختاري مقاسًا أو لونًا آخر.'); return }
-    const line = cart.find((item) => item.variantId === variantId)
-    if (line) line.quantity += 1
-    else cart.push({ variantId, quantity: 1 })
-    writeCart(cart)
+    setError('')
+
+    if (!color || !size) {
+      setError('اختاري اللون والمقاس أولًا.')
+      return
+    }
+
+    const variant = product.variants?.find((item) => item.size === size && item.color === color)
+    if (!variant) {
+      setError('هذا الخيار غير متاح حاليًا.')
+      return
+    }
+
+    if (variant.stock < 1) {
+      setError('نفد مخزون هذا الخيار.')
+      return
+    }
+
+    try {
+      const result = addCartVariant(variant)
+      if (result === 'stock-limit') {
+        setError(`الكمية المتاحة من هذا الخيار هي ${variant.stock} فقط.`)
+        return
+      }
+      if (result === 'unavailable') {
+        setError('نفد مخزون هذا الخيار.')
+        return
+      }
+    } catch (error) {
+      setError(error instanceof Error ? `تعذر حفظ السلة: ${error.message}` : 'تعذر حفظ السلة.')
+      return
+    }
+
     navigate('/cart')
   }
   const images = product.images || []
-  return <main className="page-main details-layout"><div className="product-gallery"><button className="detail-photo" aria-label="تكبير الصورة" onClick={() => images[imageIndex] && setZoomOpen(true)}>{images[imageIndex]?.image_url ? <img src={images[imageIndex].image_url} alt={images[imageIndex].alt_text || product.name} /> : <div className="no-image">الحلم</div>}</button>{images.length > 1 && <div className="detail-thumbnails">{images.map((image, index) => <button className={index === imageIndex ? 'selected' : ''} key={image.id || image.image_url} onClick={() => setImageIndex(index)} aria-label={`عرض الصورة ${index + 1}`}><img src={image.image_url} alt={image.alt_text || `${product.name} ${index + 1}`} /></button>)}</div>}</div><div className="detail-copy"><p className="eyebrow">{product.category?.name || 'عبايات الحلم'}</p><h1>{product.name}</h1><p className="detail-price">{money(product.price)} {product.compare_at_price && <del>{money(product.compare_at_price)}</del>}</p>{product.fabric && <p className="fabric-label">الخامة: {product.fabric}</p>}<p>{product.description || 'اختيرت تفاصيل هذه العباية بعناية لتمنحك إطلالة أنيقة ومريحة.'}</p><div className="choice-group"><b>اللون</b><div>{colors.map((item) => <button className={color === item ? 'choice selected' : 'choice'} key={item} onClick={() => { setColor(item); setSize('') }}>{item}</button>)}</div></div><div className="choice-group"><b>المقاس</b><div>{sizes.map((item) => { const variant = product.variants?.find((entry) => entry.size === item && (!color || entry.color === color)); return <button disabled={!variant || variant.stock < 1} className={size === item ? 'choice selected' : 'choice'} key={item} onClick={() => setSize(item)}>{item}</button> })}</div><small>المقاسات المتاحة حسب المخزون لكل لون.</small></div>{error && <p className="inline-error">{error}</p>}<button className="button button-dark full-button" onClick={addToCart}>أضيفي إلى السلة <ShoppingBag size={17} /></button><div className="delivery-note"><Truck size={18} /> عربون عند الطلب، والباقي عند الاستلام.</div></div>{zoomOpen && <div className="image-modal" role="dialog" aria-modal="true" aria-label="صورة المنتج المكبرة" onClick={() => setZoomOpen(false)}><button aria-label="إغلاق الصورة" onClick={() => setZoomOpen(false)}>×</button><img src={images[imageIndex]?.image_url} alt={product.name} /></div>}</main>
+  const showImage = (index: number) => setImageIndex((index + images.length) % images.length)
+  const handleGalleryTouchStart = (event: TouchEvent<HTMLButtonElement>) => {
+    touchStartX.current = event.touches[0]?.clientX ?? null
+  }
+  const handleGalleryTouchEnd = (event: TouchEvent<HTMLButtonElement>) => {
+    const startX = touchStartX.current
+    const endX = event.changedTouches[0]?.clientX
+    touchStartX.current = null
+    if (startX === null || endX === undefined || Math.abs(endX - startX) < 45) return
+    lastGallerySwipe.current = Date.now()
+    showImage(imageIndex + (endX > startX ? -1 : 1))
+  }
+  const openImageZoom = () => {
+    if (Date.now() - lastGallerySwipe.current < 500) return
+    if (images[imageIndex]) setZoomOpen(true)
+  }
+  return (
+    <main className="page-main details-layout">
+      <div className="product-gallery">
+        <div className="detail-image-frame">
+          <button className="detail-photo" aria-label="تكبير الصورة" onClick={openImageZoom} onTouchStart={handleGalleryTouchStart} onTouchEnd={handleGalleryTouchEnd}>
+          {images[imageIndex]?.image_url
+            ? <img key={imageIndex} src={images[imageIndex].image_url} alt={images[imageIndex].alt_text || product.name} />
+            : <div className="no-image">الحلم</div>}
+          </button>
+          {images.length > 1 && <>
+            <button className="gallery-arrow gallery-arrow-previous" type="button" aria-label="الصورة السابقة" onClick={() => showImage(imageIndex - 1)}><ChevronRight size={20} /></button>
+            <button className="gallery-arrow gallery-arrow-next" type="button" aria-label="الصورة التالية" onClick={() => showImage(imageIndex + 1)}><ChevronLeft size={20} /></button>
+            <span className="gallery-counter" aria-live="polite">{imageIndex + 1} / {images.length}</span>
+          </>}
+        </div>
+        {images.length > 1 && <div className="detail-thumbnails">{images.map((image, index) => (
+          <button className={index === imageIndex ? 'selected' : ''} key={image.id || image.image_url} onClick={() => showImage(index)} aria-label={`عرض الصورة ${index + 1}`} aria-pressed={index === imageIndex}>
+            <img src={image.image_url} alt={image.alt_text || `${product.name} ${index + 1}`} />
+          </button>
+        ))}</div>}
+      </div>
+      <div className="detail-copy">
+        <p className="eyebrow">{product.category?.name || 'عبايات الحلم'}</p>
+        <h1>{product.name}</h1>
+        <p className="detail-price">{money(product.price)} {product.compare_at_price && <del>{money(product.compare_at_price)}</del>}</p>
+        {product.fabric && <p className="fabric-label">الخامة: {product.fabric}</p>}
+        <p>{product.description || 'اختيرت تفاصيل هذه العباية بعناية لتمنحك إطلالة أنيقة ومريحة.'}</p>
+        <div className="choice-group">
+          <b>اللون</b>
+          <div>{colors.map((item) => (
+            <button
+              aria-pressed={color === item}
+              className={color === item ? 'choice selected' : 'choice'}
+              key={item}
+              onClick={() => { setColor(item); setSize(''); setError('') }}
+            >{item}</button>
+          ))}</div>
+        </div>
+        <div className="choice-group">
+          <b>المقاس</b>
+          <div>{sizes.map((item) => {
+            const variant = product.variants?.find((entry) => entry.size === item && (!color || entry.color === color))
+            const outOfStock = !variant || variant.stock < 1
+            return (
+              <button
+                aria-pressed={size === item}
+                aria-label={outOfStock ? `${item}، نفد المخزون` : `المقاس ${item}`}
+                className={`choice${size === item ? ' selected' : ''}${outOfStock ? ' out-of-stock' : ''}`}
+                disabled={!variant}
+                key={item}
+                onClick={() => { setSize(item); setError('') }}
+              >
+                {item}{outOfStock && <small>نفد</small>}
+              </button>
+            )
+          })}</div>
+          <small>اختاري المقاس، وستظهر المقاسات غير المتوفرة بعلامة «نفد».</small>
+        </div>
+        {error && <p className="inline-error" role="alert">{error}</p>}
+        <button className="button button-dark full-button" onClick={addToCart}>أضيفي إلى السلة <ShoppingBag size={17} /></button>
+        <div className="delivery-note"><Truck size={18} /> عربون عند الطلب، والباقي عند الاستلام.</div>
+      </div>
+      {zoomOpen && <div className="image-modal" role="dialog" aria-modal="true" aria-label="صورة المنتج المكبرة" onClick={() => setZoomOpen(false)}>
+        <button aria-label="إغلاق الصورة" onClick={() => setZoomOpen(false)}>×</button>
+        <img src={images[imageIndex]?.image_url} alt={product.name} />
+      </div>}
+    </main>
+  )
 }
 
 export function CategoriesPage() {
