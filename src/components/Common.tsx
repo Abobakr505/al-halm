@@ -1,8 +1,74 @@
-import { useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Facebook, Heart, Home, Instagram, Menu, Moon, Search, ShoppingBag, Sun, UserRound, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, CheckCircle2, Facebook, Heart, Home, Instagram, Menu, Moon, Search, ShoppingBag, Sun, UserRound, X } from 'lucide-react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { readCart, subscribeToCart } from '../lib/cart'
+
+type ToastKind = 'success' | 'error' | 'info'
+type ToastItem = { id: number; message: string; kind: ToastKind }
+type ToastContextValue = { notify: (message: string) => void; dismiss: (id: number) => void }
+
+const ToastContext = createContext<ToastContextValue | null>(null)
+let nextToastId = 0
+
+function toastKind(message: string): ToastKind {
+  if (/تعذر|خطأ|نفد|لا يمكن|يسمح|يجب|أدخلي|أضيفي|ارفقي|سجلي|لم يتم|فشل|الكمية المتاحة|غير متاح/.test(message)) return 'error'
+  if (/^(تم|حُفظ|أضيف|أزيل|قُبل|رُفض|نجح)/.test(message)) return 'success'
+  return 'info'
+}
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [toasts, setToasts] = useState<ToastItem[]>([])
+  const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
+  const lastToast = useRef({ message: '', time: 0 })
+
+  const dismiss = useCallback((id: number) => {
+    const timer = timers.current.get(id)
+    if (timer) clearTimeout(timer)
+    timers.current.delete(id)
+    setToasts((items) => items.filter((item) => item.id !== id))
+  }, [])
+
+  const notify = useCallback((message: string) => {
+    if (!message) return
+    const now = Date.now()
+    if (lastToast.current.message === message && now - lastToast.current.time < 500) return
+    lastToast.current = { message, time: now }
+
+    const id = ++nextToastId
+    setToasts((items) => [...items.slice(-3), { id, message, kind: toastKind(message) }])
+    timers.current.set(id, setTimeout(() => dismiss(id), 5000))
+  }, [dismiss])
+
+  useEffect(() => () => {
+    timers.current.forEach(clearTimeout)
+    timers.current.clear()
+  }, [])
+
+  return <ToastContext.Provider value={{ notify, dismiss }}>
+    {children}
+    <div className="toast-viewport" aria-live="polite" aria-relevant="additions">
+      {toasts.map((toast) => <div className={`toast toast-${toast.kind}`} key={toast.id} role={toast.kind === 'error' ? 'alert' : 'status'}>
+        <span className="toast-icon">{toast.kind === 'success' ? <CheckCircle2 size={19} /> : toast.kind === 'error' ? <AlertCircle size={19} /> : <span aria-hidden="true">✦</span>}</span>
+        <span className="toast-message">{toast.message}</span>
+        <button className="toast-close" aria-label="إغلاق التنبيه" onClick={() => dismiss(toast.id)}><X size={15} /></button>
+      </div>)}
+    </div>
+  </ToastContext.Provider>
+}
+
+export function ToastMessage({ message }: { message: string }) {
+  const toast = useContext(ToastContext)
+  if (!toast) throw new Error('ToastMessage must be rendered inside ToastProvider.')
+  useEffect(() => { toast.notify(message) }, [message, toast.notify])
+  return null
+}
+
+export function useToast() {
+  const toast = useContext(ToastContext)
+  if (!toast) throw new Error('useToast must be used inside ToastProvider.')
+  return toast.notify
+}
 
 export function SiteHeader() {
   const [dark, setDark] = useState(() => localStorage.getItem('al-hulm-theme') === 'dark')

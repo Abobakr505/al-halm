@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from "react-router-dom";
 import { Images, Plus, Upload, X } from "lucide-react";
-import { EmptyState } from "../components/Common";
+import { EmptyState, ToastMessage } from "../components/Common";
 import { money } from "../components/Storefront";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import {
@@ -325,7 +325,7 @@ function Dashboard() {
           </section>
         ))}
       </div>
-      {error && <p className="form-message">{error}</p>}
+      {error && <ToastMessage message={error} />}
       <section className="admin-card">
         <h2>متابعة سريعة</h2>
         <p className="muted-copy">
@@ -358,10 +358,20 @@ function ProductManagement() {
   const [variants, setVariants] = useState<VariantInput[]>([
     { size: "56", color: "أسود", stock: "0" },
   ]);
+  const [newSize, setNewSize] = useState("");
+  const [newColor, setNewColor] = useState("");
   const [images, setImages] = useState<File[]>([]);
   const [existingImages, setExistingImages] = useState<AdminImage[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const sizes = [...new Set(variants.map((variant) => variant.size.trim()).filter(Boolean))];
+  const colors = [...new Set(variants.map((variant) => variant.color.trim()).filter(Boolean))];
+  const variantKeys = new Set(variants.map((variant) => `${variant.size.trim()}\u0000${variant.color.trim()}`));
+  const missingVariants = sizes.flatMap((size) =>
+    colors
+      .filter((color) => !variantKeys.has(`${size}\u0000${color}`))
+      .map((color) => ({ size, color })),
+  );
 
   const load = async () => {
     if (!supabase) return;
@@ -401,6 +411,8 @@ function ProductManagement() {
       is_featured: false,
     });
     setVariants([{ size: "56", color: "أسود", stock: "0" }]);
+    setNewSize("");
+    setNewColor("");
     setImages([]);
     setExistingImages([]);
   };
@@ -440,8 +452,32 @@ function ProductManagement() {
           }))
         : [],
     );
+    setNewSize("");
+    setNewColor("");
     setExistingImages(data.images || []);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const addSize = () => {
+    const size = newSize.trim();
+    if (!size || sizes.includes(size)) return;
+    const nextColors = colors.length ? colors : ["أسود"];
+    setVariants((current) => [
+      ...current,
+      ...nextColors.map((color) => ({ size, color, stock: "0" })),
+    ]);
+    setNewSize("");
+  };
+
+  const addColor = () => {
+    const color = newColor.trim();
+    if (!color || colors.includes(color)) return;
+    const nextSizes = sizes.length ? sizes : ["56"];
+    setVariants((current) => [
+      ...current,
+      ...nextSizes.map((size) => ({ size, color, stock: "0" })),
+    ]);
+    setNewColor("");
   };
 
   const save = async (event: FormEvent) => {
@@ -509,6 +545,7 @@ function ProductManagement() {
       category_id: form.category_id || null,
       is_featured: form.is_featured,
     };
+
     const result = editing
       ? await supabase
           .from("products")
@@ -568,12 +605,12 @@ function ProductManagement() {
       if (retiredIds.length) {
         const { error } = await supabase
           .from("product_variants")
-          .update({ stock: 0 })
+          .delete()
           .in("id", retiredIds);
         if (error) {
           setBusy(false);
           setMessage(
-            `حُفظت الخيارات لكن تعذر إيقاف المقاسات المحذوفة: ${error.message}`,
+            `حُفظت الخيارات لكن تعذر حذف التركيبات المحذوفة: ${error.message}`,
           );
           return;
         }
@@ -852,74 +889,81 @@ for (const [index, image] of images.entries()) {
               ))}
             </div>
           )}
-          <div className="variant-editor wide-field">
-            <b>المقاسات والألوان والمخزون</b>
-            {variants.map((variant, index) => (
-              <div className="variant-row" key={index}>
-                <input
-                  aria-label="المقاس"
-                  placeholder="المقاس"
-                  value={variant.size}
-                  onChange={(event) =>
-                    setVariants(
-                      variants.map((item, row) =>
-                        row === index
-                          ? { ...item, size: event.target.value }
-                          : item,
-                      ),
-                    )
-                  }
-                />
-                <input
-                  aria-label="اللون"
-                  placeholder="اللون"
-                  value={variant.color}
-                  onChange={(event) =>
-                    setVariants(
-                      variants.map((item, row) =>
-                        row === index
-                          ? { ...item, color: event.target.value }
-                          : item,
-                      ),
-                    )
-                  }
-                />
-                <input
-                  aria-label="المخزون"
-                  type="number"
-                  min="0"
-                  placeholder="المخزون"
-                  value={variant.stock}
-                  onChange={(event) =>
-                    setVariants(
-                      variants.map((item, row) =>
-                        row === index
-                          ? { ...item, stock: event.target.value }
-                          : item,
-                      ),
-                    )
-                  }
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    setVariants(variants.filter((_, row) => row !== index))
-                  }
-                >
-                  حذف
-                </button>
+          <section className="variant-editor wide-field" aria-label="خيارات المنتج والمخزون">
+            <header className="variant-editor-heading">
+              <div>
+                <b>المقاسات والألوان والمخزون</b>
+                <small>أضيفي المقاسات والألوان أولًا، ثم حددي مخزون كل تركيبة.</small>
               </div>
-            ))}
-            <button
-              type="button"
-              className="text-link"
-              onClick={() =>
-                setVariants([...variants, { size: "", color: "", stock: "0" }])
-              }
-            >
-              إضافة خيار مقاس ولون
-            </button>
-          </div>
+              <span>{variants.filter((item) => item.size.trim() && item.color.trim()).length} تركيبة</span>
+            </header>
+            <div className="variant-option-groups">
+              <section className="variant-option-section">
+                <div className="variant-option-title"><b>المقاسات</b><small>{sizes.length} مقاس</small></div>
+                <div className="variant-tags">
+                  {sizes.map((size) => (
+                    <span className="variant-tag" key={size}>
+                      {size}
+                      <button type="button" aria-label={`حذف المقاس ${size}`} onClick={() => setVariants((current) => current.filter((item) => item.size.trim() !== size))}><X size={13} /></button>
+                    </span>
+                  ))}
+                  {!sizes.length && <span className="variant-empty">لم تتم إضافة مقاسات بعد.</span>}
+                </div>
+                <div className="variant-option-add">
+                  <input aria-label="مقاس جديد" placeholder="مثال: 56" value={newSize} onChange={(event) => setNewSize(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSize(); } }} />
+                  <button type="button" className="button button-outline" onClick={addSize} disabled={!newSize.trim() || sizes.includes(newSize.trim())}><Plus size={15} /> إضافة مقاس</button>
+                </div>
+              </section>
+              <section className="variant-option-section">
+                <div className="variant-option-title"><b>الألوان</b><small>{colors.length} لون</small></div>
+                <div className="variant-tags">
+                  {colors.map((color) => (
+                    <span className="variant-tag" key={color}>
+                      {color}
+                      <button type="button" aria-label={`حذف اللون ${color}`} onClick={() => setVariants((current) => current.filter((item) => item.color.trim() !== color))}><X size={13} /></button>
+                    </span>
+                  ))}
+                  {!colors.length && <span className="variant-empty">لم تتم إضافة ألوان بعد.</span>}
+                </div>
+                <div className="variant-option-add">
+                  <input aria-label="لون جديد" placeholder="مثال: أسود" value={newColor} onChange={(event) => setNewColor(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addColor(); } }} />
+                  <button type="button" className="button button-outline" onClick={addColor} disabled={!newColor.trim() || colors.includes(newColor.trim())}><Plus size={15} /> إضافة لون</button>
+                </div>
+              </section>
+            </div>
+            <section className="variant-stock-section">
+              <div className="variant-option-title"><b>مخزون كل تركيبة</b><small>المخزون مستقل لكل لون ومقاس</small></div>
+              {variants.length ? (
+                <div className="variant-stock-list">
+                  {variants.map((variant, index) => (
+                    <div className="variant-stock-row" key={`${variant.size}-${variant.color}-${index}`}>
+                      <span className="variant-stock-name">{variant.color} <span>·</span> مقاس {variant.size}</span>
+                      <label>الكمية المتاحة
+                        <input aria-label={`مخزون ${variant.color} مقاس ${variant.size}`} type="number" min="0" value={variant.stock} onChange={(event) => setVariants((current) => current.map((item, row) => row === index ? { ...item, stock: event.target.value } : item))} />
+                      </label>
+                      <button type="button" className="variant-stock-remove" aria-label={`حذف تركيبة ${variant.color} مقاس ${variant.size}`} onClick={() => setVariants((current) => current.filter((_, row) => row !== index))}><X size={15} /></button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="variant-empty">أضيفي مقاسًا ولونًا لبدء تحديد المخزون.</p>
+              )}
+              {missingVariants.length > 0 && (
+                <div className="variant-missing-combinations">
+                  <small>تركيبات غير مضافة:</small>
+                  {missingVariants.map(({ size, color }) => (
+                    <button
+                      type="button"
+                      key={`${size}-${color}`}
+                      onClick={() => setVariants((current) => [...current, { size, color, stock: "0" }])}
+                    >
+                      <Plus size={13} /> {color} · {size}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </section>
           <label className="checkbox-field">
             <input
               type="checkbox"
@@ -949,7 +993,7 @@ for (const [index, image] of images.entries()) {
             )}
           </div>
         </form>
-        {message && <p className="form-message">{message}</p>}
+        {message && <ToastMessage message={message} />}
       </section>
       <section className="admin-card">
         <h2>المنتجات</h2>
@@ -1082,7 +1126,7 @@ if (imageFile) {
     <>
       <section className="admin-card">
         <h2>{editing ? "تعديل القسم" : "إضافة قسم"}</h2>
-        <form className="admin-form" onSubmit={save}>
+        <form className="admin-form category-admin-form" onSubmit={save}>
           <label>
             اسم القسم
             <input
@@ -1145,29 +1189,31 @@ if (imageFile) {
               }
             />
           </label>
-          <button className="button button-dark">حفظ القسم</button>
-          {editing && (
-            <button
-              type="button"
-              className="button button-outline"
-              onClick={() => {
-                setEditing(null);
-                setEditingImagePath(null);
-                setImageFile(null);
-                setForm({
-                  name: "",
-                  slug: "",
-                  description: "",
-                  image_url: "",
-                  position: "0",
-                });
-              }}
-            >
-              إلغاء
-            </button>
-          )}
+          <div className="category-form-actions">
+            <button className="button button-dark">حفظ القسم</button>
+            {editing && (
+              <button
+                type="button"
+                className="button button-outline"
+                onClick={() => {
+                  setEditing(null);
+                  setEditingImagePath(null);
+                  setImageFile(null);
+                  setForm({
+                    name: "",
+                    slug: "",
+                    description: "",
+                    image_url: "",
+                    position: "0",
+                  });
+                }}
+              >
+                إلغاء
+              </button>
+            )}
+          </div>
         </form>
-        {message && <p className="form-message">{message}</p>}
+        {message && <ToastMessage message={message} />}
       </section>
       <section className="admin-card">
         <h2>الأقسام</h2>
@@ -1252,7 +1298,7 @@ function OrderManagement() {
   return (
     <section className="admin-card">
       <h2>كل الطلبات</h2>
-      {error && <p className="form-message">{error}</p>}
+      {error && <ToastMessage message={error} />}
       {orders.length ? (
         <div className="table-scroll">
           <table className="admin-table">
@@ -1457,17 +1503,13 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
   if (!order)
     return (
       <section className="admin-card">
-        <p className="form-message">{message || "تعذر تحميل تفاصيل الطلب."}</p>
+        <ToastMessage message={message || "تعذر تحميل تفاصيل الطلب."} />
         <Link to="/admin/orders">العودة إلى الطلبات</Link>
       </section>
     );
   return (
     <>
-      {message && (
-        <section className="admin-card">
-          <p className="form-message">{message}</p>
-        </section>
-      )}
+      {message && <ToastMessage message={message} />}
       <section className="admin-card">
         <div className="order-detail-heading">
           <h2>طلب رقم {order.order_number}</h2>
@@ -1597,7 +1639,7 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
             حفظ التحديث
           </button>
         </div>
-        {message && <p className="form-message">{message}</p>}
+        {message && <ToastMessage message={message} />}
       </section>
     </>
   );
@@ -1633,7 +1675,7 @@ function CustomerManagement() {
   return (
     <section className="admin-card">
       <h2>العملاء</h2>
-      {message && <p className="form-message">{message}</p>}
+      {message && <ToastMessage message={message} />}
       {customers.length ? (
         <div className="table-scroll">
           <table className="admin-table">
@@ -1889,7 +1931,7 @@ function StoreSettings() {
           حفظ الإعدادات
         </button>
       </form>
-      {message && <p className="form-message">{message}</p>}
+      {message && <ToastMessage message={message} />}
     </section>
   );
 }

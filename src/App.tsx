@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
-import { SiteFooter, SiteHeader, NotFoundPage } from './components/Common'
+import { SiteFooter, SiteHeader, NotFoundPage, ToastProvider } from './components/Common'
 import { setPageMetadata } from './lib/seo'
 
 const HomePage = lazy(() => import('./components/Storefront').then((module) => ({ default: module.HomePage })))
@@ -45,31 +45,33 @@ function RouteMetadata() {
 }
 
 export default function App() {
-  return <div className="app-shell">
-    <SiteHeader />
-    <RouteMetadata />
-    <Suspense fallback={<main className="page-main"><div className="loading-message">جارٍ تحميل الصفحة…</div></main>}>
-    <Routes>
-      <Route path="/" element={<HomePage />} />
-      <Route path="/products" element={<ProductsPage />} />
-      <Route path="/search" element={<ProductsPage />} />
-      <Route path="/products/:slug" element={<ProductDetailsPage />} />
-      <Route path="/categories" element={<CategoriesPage />} />
-      <Route path="/cart" element={<CartPage />} />
-      <Route path="/checkout" element={<CheckoutPage />} />
-      <Route path="/login" element={<AuthPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/account" element={<AccountPage />} />
-      <Route path="/orders" element={<OrdersPage />} />
-      <Route path="/orders/:id" element={<OrderDetailsPage />} />
-      <Route path="/favorites" element={<FavoritesPage />} />
-      <Route path="/admin/*" element={<AdminPage />} />
-      <Route path="/about" element={<StoreInformation page="about" />} />
-      <Route path="/contact" element={<StoreInformation page="contact" />} />
-      <Route path="/policies" element={<StoreInformation page="policies" />} />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
-    </Suspense>
-    <SiteFooter />
-  </div>
+  return <ToastProvider>
+    <div className="app-shell">
+      <SiteHeader />
+      <RouteMetadata />
+      <Suspense fallback={<main className="page-main"><div className="loading-message">جارٍ تحميل الصفحة…</div></main>}>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/products" element={<ProductsPage />} />
+          <Route path="/search" element={<ProductsPage />} />
+          <Route path="/products/:slug" element={<ProductDetailsPage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
+          <Route path="/cart" element={<CartPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/account" element={<AccountPage />} />
+          <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/orders/:id" element={<OrderDetailsPage />} />
+          <Route path="/favorites" element={<FavoritesPage />} />
+          <Route path="/admin/*" element={<AdminPage />} />
+          <Route path="/about" element={<StoreInformation page="about" />} />
+          <Route path="/contact" element={<StoreInformation page="contact" />} />
+          <Route path="/policies" element={<StoreInformation page="policies" />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
+      <SiteFooter />
+    </div>
+  </ToastProvider>
 }

@@ -1,13 +1,33 @@
 import { useEffect, useRef, useState, type MouseEvent, type TouchEvent } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowUpLeft, Check, ChevronLeft, ChevronRight, Heart, Instagram, Search, ShoppingBag, Truck } from 'lucide-react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { setPageMetadata } from '../lib/seo'
 import { addCartVariant } from '../lib/cart'
 import type { Category, Product } from '../types'
-import { EmptyState, InfoPage } from './Common'
+import { EmptyState, InfoPage, useToast } from './Common'
 
 export const money = (value: number) => `${new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 2 }).format(value)} ج.م`
+
+const normalizeFilterValue = (value: string) =>
+  value
+    .normalize('NFKC')
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLocaleLowerCase('ar')
+
+function uniqueFilterValues(values: (string | null | undefined)[]) {
+  const unique = new Map<string, string>()
+  values.forEach((value) => {
+    const label = value?.trim()
+    if (!label) return
+    const key = normalizeFilterValue(label)
+    if (!unique.has(key)) unique.set(key, label)
+  })
+  return [...unique.values()].sort((a, b) => a.localeCompare(b, 'ar'))
+}
 
 export function categoryFallback(index: number) {
   return [
@@ -52,7 +72,7 @@ export function HomePage() {
         <div className="hero-note"><span className="note-line" /> تصاميم مختارة بعناية</div>
       </div>
       <div className="hero-image">
-        <img src="https://images.unsplash.com/photo-1585487000160-6ebcfceb0d03?auto=format&fit=crop&w=1400&q=85" alt="إطلالة أنيقة بعباية سوداء" />
+        <img src="/home.webp" alt="إطلالة أنيقة بعباية سوداء" />
         <div className="hero-stamp"><span>أناقتك</span><b>تبدأ</b><span>من هنا</span></div>
         <span className="image-caption">مجموعة الحلم</span>
       </div>
@@ -72,13 +92,16 @@ export function HomePage() {
       <SectionHeading eyebrow="اختيارات الحلم" title="قطع تستحق أن تُرى" action="/products" actionText="تصفحي العبايات" />
       <ProductGrid products={products} />
     </section>
-    <section className="story-section" id="story"><div className="story-image"><img src="https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=1100&q=85" alt="أناقة العباية الخليجية" /></div><div className="story-copy"><p className="eyebrow">من القلب إلى خزانة أناقتك</p><h2>كل تفصيلة<br />لها <em>حكاية.</em></h2><p>في الحلم، نختار القماش والقصّة والتطريز بعناية؛ لتكون عبايتك رفيقة أيامك الجميلة، وتفصيلاً يشبهك أنتِ.</p><Link className="text-link" to="/about">اكتشفي حكايتنا <ArrowLeft size={16} /></Link><span className="story-number">01 / 03</span></div></section>
+    <section className="story-section" id="story"><div className="story-image"><img src="/story.jpg" alt="أناقة العباية الخليجية" /></div><div className="story-copy"><p className="eyebrow">من القلب إلى خزانة أناقتك</p><h2>كل تفصيلة<br />لها <em>حكاية.</em></h2><p>في الحلم، نختار القماش والقصّة والتطريز بعناية؛ لتكون عبايتك رفيقة أيامك الجميلة، وتفصيلاً يشبهك أنتِ.</p><Link className="text-link" to="/about">اكتشفي حكايتنا <ArrowLeft size={16} /></Link><span className="story-number">01 / 03</span></div></section>
     <section className="newsletter"><span>رسائلٌ من الحلم</span><h2>كوني أول من يعرف <em>حكايتنا القادمة.</em></h2><p>تابعينا لتصلك جديد مجموعاتنا وإلهاماتنا.</p><a className="button button-outline" href="https://www.instagram.com/" target="_blank" rel="noreferrer"><Instagram size={17} /> تابعي الحلم</a></section>
   </main>
 }
 
 export function ProductsPage() {
+  const [searchParams] = useSearchParams()
+  const categorySlug = searchParams.get('category')?.trim() || ''
   const [products, setProducts] = useState<Product[]>([])
+  const [categoryInfo, setCategoryInfo] = useState<{ name: string; description: string | null } | null>(null)
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [size, setSize] = useState('')
@@ -93,34 +116,66 @@ export function ProductsPage() {
 
   useEffect(() => {
     if (!supabase) { setLoading(false); return }
+    const client = supabase
     let active = true
-    const url = new URLSearchParams(window.location.search)
-    let request = supabase.from('products').select('*, category:categories(name,slug), images:product_images(image_url,alt_text,position), variants:product_variants(id,size,color,stock)').eq('is_active', true).order('created_at', { ascending: false })
-    if (url.has('category')) request = request.eq('category.slug', url.get('category')!)
-    request.then(({ data, error: resultError }) => {
-      if (!active) return
-      if (resultError) setError('تعذر تحميل العبايات الآن. حاولي مرة أخرى لاحقًا.')
-      else setProducts((data ?? []) as Product[])
-      setLoading(false)
-    })
-    return () => { active = false }
-  }, [])
+    const loadProducts = async () => {
+      const productRequest = client
+        .from('products')
+        .select('*, category:categories(name,slug,description), images:product_images(image_url,alt_text,position), variants:product_variants(id,size,color,stock)')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+      const categoryRequest = categorySlug
+        ? client
+            .from('categories')
+            .select('name,description')
+            .eq('slug', categorySlug)
+            .eq('is_active', true)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null })
 
-  const sizes = [...new Set(products.flatMap((product) => product.variants?.map((variant) => variant.size) || []))].sort()
-  const colors = [...new Set(products.flatMap((product) => product.variants?.map((variant) => variant.color) || []))].sort()
-  const fabrics = [...new Set(products.map((product) => product.fabric).filter((value): value is string => Boolean(value)))].sort()
+      const [productResult, categoryResult] = await Promise.all([productRequest, categoryRequest])
+      if (!active) return
+      if (productResult.error) setError('تعذر تحميل العبايات الآن. حاولي مرة أخرى لاحقًا.')
+      else setProducts((productResult.data ?? []) as Product[])
+      if (categoryResult.error) setError('تعذر تحميل بيانات القسم الآن. حاولي مرة أخرى لاحقًا.')
+      else setCategoryInfo(categoryResult.data)
+      setLoading(false)
+    }
+
+    setLoading(true)
+    setError('')
+    setCategoryInfo(null)
+    setProducts([])
+    setQuery('')
+    setSize('')
+    setColor('')
+    setFabric('')
+    setMinPrice('')
+    setMaxPrice('')
+    setDiscounted(false)
+    setAvailability('')
+    void loadProducts()
+    return () => { active = false }
+  }, [categorySlug])
+
+  const sizes = uniqueFilterValues(products.flatMap((product) => product.variants?.map((variant) => variant.size) || []))
+  const colors = uniqueFilterValues(products.flatMap((product) => product.variants?.map((variant) => variant.color) || []))
+  const fabrics = uniqueFilterValues(products.map((product) => product.fabric))
   const visible = products.filter((product) =>
+    (!categorySlug || normalizeFilterValue(product.category?.slug || '') === normalizeFilterValue(categorySlug)) &&
     product.name.includes(query.trim()) &&
-    (!fabric || product.fabric === fabric) &&
+    (!fabric || normalizeFilterValue(product.fabric || '') === normalizeFilterValue(fabric)) &&
     (!minPrice || product.price >= Number(minPrice)) &&
     (!maxPrice || product.price <= Number(maxPrice)) &&
     (!discounted || Boolean(product.compare_at_price && product.compare_at_price > product.price)) &&
     (!size && !color || product.variants?.some((variant) =>
-      (!size || variant.size === size) && (!color || variant.color === color) && variant.stock > 0,
+      (!size || normalizeFilterValue(variant.size) === normalizeFilterValue(size)) &&
+      (!color || normalizeFilterValue(variant.color) === normalizeFilterValue(color)) &&
+      variant.stock > 0,
     )) &&
     (!availability || (availability === 'available' ? product.variants?.some((variant) => variant.stock > 0) : product.variants?.every((variant) => variant.stock === 0))),
   ).sort((a, b) => sort === 'price-asc' ? a.price - b.price : sort === 'price-desc' ? b.price - a.price : 0)
-  return <main className="page-main"><div className="page-title"><p className="eyebrow">من مجموعتنا إليكِ</p><h1>العبايات</h1><p>اكتشفي قطعًا صُممت لتكون جزءًا من حكايتك.</p></div><div className="toolbar"><span>{loading ? 'جارٍ التحميل…' : `${visible.length} عباية`}</span><label className="search-field"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحثي عن عباية" /></label><select aria-label="المقاس" value={size} onChange={(event) => setSize(event.target.value)}><option value="">كل المقاسات</option>{sizes.map((item) => <option key={item}>{item}</option>)}</select><select aria-label="اللون" value={color} onChange={(event) => setColor(event.target.value)}><option value="">كل الألوان</option>{colors.map((item) => <option key={item}>{item}</option>)}</select><select aria-label="نوع القماش" value={fabric} onChange={(event) => setFabric(event.target.value)}><option value="">كل الخامات</option>{fabrics.map((item) => <option key={item}>{item}</option>)}</select><label className="price-filter">من<input aria-label="أقل سعر" type="number" min="0" value={minPrice} onChange={(event) => setMinPrice(event.target.value)} /></label><label className="price-filter">إلى<input aria-label="أعلى سعر" type="number" min="0" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)} /></label><label className="discount-filter"><input type="checkbox" checked={discounted} onChange={(event) => setDiscounted(event.target.checked)} /> عروض</label><select aria-label="التوفر" value={availability} onChange={(event) => setAvailability(event.target.value)}><option value="">كل المنتجات</option><option value="available">متوفر</option><option value="unavailable">نفد المخزون</option></select><select aria-label="ترتيب المنتجات" value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">الأحدث</option><option value="price-asc">السعر: الأقل أولًا</option><option value="price-desc">السعر: الأعلى أولًا</option></select></div>{error ? <EmptyState title="حدث خطأ" message={error} /> : loading ? <div className="loading-grid">{[1, 2, 3, 4].map((item) => <div className="skeleton" key={item} />)}</div> : <ProductGrid products={visible} />}</main>
+  return <main className="page-main"><div className="page-title"><p className="eyebrow">من مجموعتنا إليكِ</p><h1>{categorySlug ? categoryInfo?.name || 'منتجات القسم' : 'العبايات'}</h1><p>{categorySlug ? categoryInfo?.description || 'تصفحي منتجات هذا القسم واختاري ما يناسبك.' : 'اكتشفي قطعًا صُممت لتكون جزءًا من حكايتك.'}</p>{categorySlug && <Link className="text-link category-filter-reset" to="/products">عرض كل المنتجات <ArrowLeft size={15} /></Link>}</div><div className="toolbar"><span>{loading ? 'جارٍ التحميل…' : `${visible.length} عباية`}</span><label className="search-field"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحثي عن عباية" /></label><select aria-label="المقاس" value={size} onChange={(event) => setSize(event.target.value)}><option value="">كل المقاسات</option>{sizes.map((item) => <option key={item}>{item}</option>)}</select><select aria-label="اللون" value={color} onChange={(event) => setColor(event.target.value)}><option value="">كل الألوان</option>{colors.map((item) => <option key={item}>{item}</option>)}</select><select aria-label="نوع القماش" value={fabric} onChange={(event) => setFabric(event.target.value)}><option value="">كل الخامات</option>{fabrics.map((item) => <option key={item}>{item}</option>)}</select><label className="price-filter">من<input aria-label="أقل سعر" type="number" min="0" value={minPrice} onChange={(event) => setMinPrice(event.target.value)} /></label><label className="price-filter">إلى<input aria-label="أعلى سعر" type="number" min="0" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value)} /></label><label className="discount-filter"><input type="checkbox" checked={discounted} onChange={(event) => setDiscounted(event.target.checked)} /> عروض</label><select aria-label="التوفر" value={availability} onChange={(event) => setAvailability(event.target.value)}><option value="">كل المنتجات</option><option value="available">متوفر</option><option value="unavailable">نفد المخزون</option></select><select aria-label="ترتيب المنتجات" value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">الأحدث</option><option value="price-asc">السعر: الأقل أولًا</option><option value="price-desc">السعر: الأعلى أولًا</option></select></div>{error ? <EmptyState title="حدث خطأ" message={error} /> : loading ? <div className="loading-grid">{[1, 2, 3, 4].map((item) => <div className="skeleton" key={item} />)}</div> : <ProductGrid products={visible} />}</main>
 }
 
 export function ProductGrid({ products }: { products: Product[] }) {
@@ -144,7 +199,7 @@ export function ProductGrid({ products }: { products: Product[] }) {
 }
 
 function ProductQuickAdd({ product }: { product: Product }) {
-  const [message, setMessage] = useState('')
+  const notify = useToast()
   const availableVariants = product.variants?.filter((variant) => variant.stock > 0) ?? []
 
   if (availableVariants.length !== 1) {
@@ -154,20 +209,18 @@ function ProductQuickAdd({ product }: { product: Product }) {
   }
 
   const add = () => {
-    setMessage('')
     try {
       const result = addCartVariant(availableVariants[0])
-      if (result === 'added') setMessage('تمت الإضافة إلى السلة')
-      else if (result === 'stock-limit') setMessage(`الكمية المتاحة ${availableVariants[0].stock} فقط`)
-      else setMessage('نفد المخزون')
+      if (result === 'added') notify('تمت الإضافة إلى السلة.')
+      else if (result === 'stock-limit') notify(`الكمية المتاحة ${availableVariants[0].stock} فقط`)
+      else notify('نفد المخزون')
     } catch (error) {
-      setMessage(error instanceof Error ? `تعذر حفظ السلة: ${error.message}` : 'تعذر حفظ السلة.')
+      notify(error instanceof Error ? `تعذر حفظ السلة: ${error.message}` : 'تعذر حفظ السلة.')
     }
   }
 
   return <div className="quick-add-wrap">
-    <button className="quick-add" onClick={add}>{message === 'تمت الإضافة إلى السلة' ? <Check size={15} /> : <ShoppingBag size={15} />}{message === 'تمت الإضافة إلى السلة' ? message : 'أضيفي إلى السلة'}</button>
-    {message && message !== 'تمت الإضافة إلى السلة' && <span className="quick-add-message" role="status">{message}</span>}
+    <button className="quick-add" onClick={add}><ShoppingBag size={15} /> أضيفي إلى السلة</button>
   </div>
 }
 
@@ -180,7 +233,7 @@ function ProductStock({ product }: { product: Product }) {
 function FavoriteButton({ productId }: { productId: string }) {
   const [favorite, setFavorite] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
+  const notify = useToast()
   useEffect(() => {
     let active = true
     const check = async () => {
@@ -196,26 +249,29 @@ function FavoriteButton({ productId }: { productId: string }) {
   const toggle = async (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault(); event.stopPropagation()
     if (!supabase) return
-    setBusy(true); setMessage('')
+    setBusy(true)
     const { data: userData, error: userError } = await supabase.auth.getUser()
-    if (userError || !userData.user) { setMessage('سجلي الدخول لحفظ المفضلة.'); setBusy(false); return }
+    if (userError || !userData.user) { notify('سجلي الدخول لحفظ المفضلة.'); setBusy(false); return }
     const result = favorite
       ? await supabase.from('favorites').delete().eq('user_id', userData.user.id).eq('product_id', productId)
       : await supabase.from('favorites').insert({ user_id: userData.user.id, product_id: productId })
     setBusy(false)
-    if (result.error) setMessage(`تعذر تحديث المفضلة: ${result.error.message}`)
-    else setFavorite(!favorite)
+    if (result.error) notify(`تعذر تحديث المفضلة: ${result.error.message}`)
+    else {
+      setFavorite(!favorite)
+      notify(favorite ? 'أزيلت من المفضلة.' : 'أضيفت للمفضلة.')
+    }
   }
-  return <><button className={favorite ? 'favorite-button is-favorite' : 'favorite-button'} aria-label={favorite ? 'إزالة من المفضلة' : 'إضافة للمفضلة'} disabled={busy} onClick={(event) => void toggle(event)}><Heart size={17} fill={favorite ? 'currentColor' : 'none'} /></button>{message && <span className="favorite-message">{message}</span>}</>
+  return <button className={favorite ? 'favorite-button is-favorite' : 'favorite-button'} aria-label={favorite ? 'إزالة من المفضلة' : 'إضافة للمفضلة'} disabled={busy} onClick={(event) => void toggle(event)}><Heart size={17} fill={favorite ? 'currentColor' : 'none'} /></button>
 }
 
 export function ProductDetailsPage() {
   const { slug } = useParams()
+  const notify = useToast()
   const [product, setProduct] = useState<Product | null>(null)
   const [loading, setLoading] = useState(true)
   const [size, setSize] = useState('')
   const [color, setColor] = useState('')
-  const [error, setError] = useState('')
   const [loadError, setLoadError] = useState('')
   const [imageIndex, setImageIndex] = useState(0)
   const [zoomOpen, setZoomOpen] = useState(false)
@@ -288,39 +344,38 @@ export function ProductDetailsPage() {
   const colors = [...new Set((product.variants ?? []).map((variant) => variant.color))]
   const sizes = [...new Set((product.variants ?? []).filter((variant) => !color || variant.color === color).map((variant) => variant.size))]
   const addToCart = () => {
-    setError('')
-
     if (!color || !size) {
-      setError('اختاري اللون والمقاس أولًا.')
+      notify('اختاري اللون والمقاس أولًا.')
       return
     }
 
     const variant = product.variants?.find((item) => item.size === size && item.color === color)
     if (!variant) {
-      setError('هذا الخيار غير متاح حاليًا.')
+      notify('هذا الخيار غير متاح حاليًا.')
       return
     }
 
     if (variant.stock < 1) {
-      setError('نفد مخزون هذا الخيار.')
+      notify('نفد مخزون هذا الخيار.')
       return
     }
 
     try {
       const result = addCartVariant(variant)
       if (result === 'stock-limit') {
-        setError(`الكمية المتاحة من هذا الخيار هي ${variant.stock} فقط.`)
+        notify(`الكمية المتاحة من هذا الخيار هي ${variant.stock} فقط.`)
         return
       }
       if (result === 'unavailable') {
-        setError('نفد مخزون هذا الخيار.')
+        notify('نفد مخزون هذا الخيار.')
         return
       }
     } catch (error) {
-      setError(error instanceof Error ? `تعذر حفظ السلة: ${error.message}` : 'تعذر حفظ السلة.')
+      notify(error instanceof Error ? `تعذر حفظ السلة: ${error.message}` : 'تعذر حفظ السلة.')
       return
     }
 
+    notify('تمت الإضافة إلى السلة.')
     navigate('/cart')
   }
   const images = product.images || []
@@ -374,7 +429,7 @@ export function ProductDetailsPage() {
               aria-pressed={color === item}
               className={color === item ? 'choice selected' : 'choice'}
               key={item}
-              onClick={() => { setColor(item); setSize(''); setError('') }}
+              onClick={() => { setColor(item); setSize('') }}
             >{item}</button>
           ))}</div>
         </div>
@@ -390,7 +445,7 @@ export function ProductDetailsPage() {
                 className={`choice${size === item ? ' selected' : ''}${outOfStock ? ' out-of-stock' : ''}`}
                 disabled={!variant}
                 key={item}
-                onClick={() => { setSize(item); setError('') }}
+                onClick={() => setSize(item)}
               >
                 {item}{outOfStock && <small>نفد</small>}
               </button>
@@ -398,7 +453,6 @@ export function ProductDetailsPage() {
           })}</div>
           <small>اختاري المقاس، وستظهر المقاسات غير المتوفرة بعلامة «نفد».</small>
         </div>
-        {error && <p className="inline-error" role="alert">{error}</p>}
         <button className="button button-dark full-button" onClick={addToCart}>أضيفي إلى السلة <ShoppingBag size={17} /></button>
         <div className="delivery-note"><Truck size={18} /> عربون عند الطلب، والباقي عند الاستلام.</div>
       </div>

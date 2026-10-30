@@ -4,7 +4,7 @@ import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-route
 import { ArrowLeft } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { orderStatusLabels, type OrderStatus } from '../types'
-import { EmptyState } from '../components/Common'
+import { EmptyState, ToastMessage } from '../components/Common'
 import { money, categoryFallback } from '../components/Storefront'
 
 type Address = {
@@ -487,7 +487,7 @@ export function AccountPage() {
               تسجيل الخروج
             </button>
 
-            {message && <p className="form-message">{message}</p>}
+            {message && <ToastMessage message={message} />}
           </div>
         </div>
       </main>
@@ -1026,11 +1026,7 @@ export function AuthPage() {
             />
           </label>
 
-          {message && (
-            <p className="form-message" role="alert">
-              {message}
-            </p>
-          )}
+          {message && <ToastMessage message={message} />}
 
           {signupCooldown > 0 && mode === 'signup' && (
             <p className="cooldown-message" role="status">
@@ -1146,11 +1142,7 @@ export function ResetPasswordPage() {
             />
           </label>
 
-          {message && (
-            <p className="form-message" role="alert">
-              {message}
-            </p>
-          )}
+          {message && <ToastMessage message={message} />}
 
           <button
             type="submit"
@@ -1368,7 +1360,7 @@ export function OrderDetailsPage() {
           <h1>تفاصيل الطلب</h1>
         </div>
 
-        {message && <p className="form-message">{message}</p>}
+        {message && <ToastMessage message={message} />}
 
         {order ? (
           <>
