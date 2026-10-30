@@ -29,7 +29,7 @@ function AboutPage({ storeName, storyText }: { storeName: string; storyText?: st
       <section className="about-hero">
         <div className="about-hero-image">
           <img
-            src="https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=1400&q=85"
+            src="/about.jpg"
             alt="إطلالة أنيقة تعبّر عن أسلوب الحلم"
           />
           <span>أناقة تبدأ من إحساسك</span>
