@@ -2130,18 +2130,19 @@ function PromotionManagement() {
 }
 
 function StoreSettings() {
-  const [settings, setSettings] = useState({
-    store_name: "متجر الحلم",
-    about_text: "",
-    delivery_fee: "0",
-    transfer_details: "",
-    contact_phone: "",
-    contact_email: "",
-    instagram_url: "",
-    facebook_url: "",
-    return_policy: "",
-    privacy_policy: "",
-  });
+const [settings, setSettings] = useState({
+  store_name: "متجر الحلم",
+  about_text: "",
+  delivery_fee: "0",
+  transfer_details: "",
+  contact_phone: "",
+  contact_email: "",
+  instagram_url: "",
+  facebook_url: "",
+  tiktok_url: "",          // ← جديد
+  return_policy: "",
+  privacy_policy: "",
+});
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -2149,8 +2150,8 @@ function StoreSettings() {
     supabase
       .from("store_settings")
       .select(
-        "store_name,about_text,delivery_fee,transfer_details,contact_phone,contact_email,instagram_url,facebook_url,return_policy,privacy_policy",
-      )
+  "store_name,about_text,delivery_fee,transfer_details,contact_phone,contact_email,instagram_url,facebook_url,tiktok_url,return_policy,privacy_policy",
+)
       .eq("id", true)
       .single()
       .then(({ data, error }) => {
@@ -2165,6 +2166,7 @@ function StoreSettings() {
             contact_email: data.contact_email,
             instagram_url: data.instagram_url,
             facebook_url: data.facebook_url,
+            tiktok_url: data.tiktok_url,
             return_policy: data.return_policy,
             privacy_policy: data.privacy_policy,
           });
@@ -2185,6 +2187,7 @@ function StoreSettings() {
         contact_email: settings.contact_email,
         instagram_url: settings.instagram_url,
         facebook_url: settings.facebook_url,
+        tiktok_url: settings.tiktok_url,
         return_policy: settings.return_policy,
         privacy_policy: settings.privacy_policy,
         updated_at: new Date().toISOString(),
@@ -2248,6 +2251,17 @@ function StoreSettings() {
             }
           />
         </label>
+        <label>
+  رابط تيك توك
+  <input
+    type="url"
+    placeholder="https://www.tiktok.com/@yourstore"
+    value={settings.tiktok_url}
+    onChange={(event) =>
+      setSettings({ ...settings, tiktok_url: event.target.value })
+    }
+  />
+</label>
         <label>
           تكلفة التوصيل
           <input

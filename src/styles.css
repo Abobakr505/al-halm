@@ -1855,7 +1855,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 
 /* ---------- 11) صفحة المنتج ---------- */
 .detail-copy > * { transition: transform .3s ease; }
-.detail-price { animation: price-glow 3.5s ease-in-out infinite; }
 @keyframes price-glow { 0%, 100% { text-shadow: none; } 50% { text-shadow: 0 0 14px color-mix(in srgb, var(--gold) 35%, transparent); } }
 .choice.selected { animation: choice-pop .35s cubic-bezier(.2,.8,.2,1.4); background: color-mix(in srgb, var(--gold) 10%, var(--surface)); }
 @keyframes choice-pop { 0% { transform: scale(.9); } 100% { transform: scale(1); } }
@@ -1865,7 +1864,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 @media (hover: none) { .gallery-arrow { opacity: 1; } }
 .delivery-note svg { animation: truck-drive 3.2s ease-in-out infinite; }
 @keyframes truck-drive { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-5px); } }
-.full-button { animation: cta-glow 3.5s ease-in-out 1.5s infinite; }
 @keyframes cta-glow {
   0%, 100% { box-shadow: 0 0 0 0 transparent; }
   50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--gold) 16%, transparent); }
@@ -1934,4 +1932,36 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
   [data-rv][data-in] { animation: none !important; }
   .hero-image > img { transform: none !important; }
   .scroll-progress { transition: none; }
+}
+
+.settings-form textarea {
+  background: #fdf6ee;          /* لون الخلفية */
+  color: #2b2118;               /* لون النص */
+  border: 1px solid #e6d5c0;    /* لون الحدود */
+  border-radius: 12px;
+  padding: 12px 14px;
+  min-height: 120px;
+  font: inherit;
+  resize: vertical;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.settings-form textarea:focus {
+  outline: none;
+  background: #fff;
+  border-color: #b8893f;
+  box-shadow: 0 0 0 3px rgba(184, 137, 63, 0.18);
+}
+
+/* الوضع الداكن */
+.dark .settings-form textarea {
+  background: #231c16;
+  color: #f3e9dc;
+  border-color: #4a3b2c;
+}
+
+.dark .settings-form textarea:focus {
+  background: #2c231b;
+  border-color: #d4a85a;
+  box-shadow: 0 0 0 3px rgba(212, 168, 90, 0.2);
 }

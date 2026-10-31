@@ -39,7 +39,7 @@ import {
   promotionPrice,
   type Promotion,
 } from "../lib/promotions";
-import { EmptyState, InfoPage, useToast } from "./Common";
+import { EmptyState, InfoPage,TikTokIcon , useToast } from "./Common";
 
 export const money = (value: number) =>
   `${new Intl.NumberFormat("ar-EG", { maximumFractionDigits: 2 }).format(value)} ج.م`;
@@ -110,10 +110,15 @@ function SectionHeading({
 export function HomePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [socialLinks, setSocialLinks] = useState<{ instagram: string; facebook: string }>({
-    instagram: "",
-    facebook: "",
-  });
+const [socialLinks, setSocialLinks] = useState<{
+  instagram: string;
+  facebook: string;
+  tiktok: string;
+}>({
+  instagram: "",
+  facebook: "",
+  tiktok: "",
+});
   const [promotions, setPromotions] = useState<
     (Promotion & { category_id: string })[]
   >([]);
@@ -146,7 +151,7 @@ export function HomePage() {
         .order("created_at", { ascending: false }),
       supabase
         .from("store_settings")
-        .select("instagram_url,facebook_url")
+        .select("instagram_url,facebook_url,tiktok_url")
         .eq("id", true)
         .maybeSingle(),
     ]).then(([productResult, categoryResult, promotionResult, settingsResult]) => {
@@ -175,9 +180,10 @@ export function HomePage() {
         console.error("تعذر تحميل روابط التواصل للرئيسية:", settingsResult.error.message);
       } else {
         setSocialLinks({
-          instagram: settingsResult.data?.instagram_url || "",
-          facebook: settingsResult.data?.facebook_url || "",
-        });
+  instagram: settingsResult.data?.instagram_url || "",
+  facebook: settingsResult.data?.facebook_url || "",
+  tiktok: settingsResult.data?.tiktok_url || "",
+});
       }
     });
     return () => {
@@ -381,14 +387,25 @@ export function HomePage() {
           كوني أول من يعرف <em>حكايتنا القادمة.</em>
         </h2>
         <p>تابعينا لتصلك جديد مجموعاتنا وإلهاماتنا.</p>
-        {(socialLinks.instagram || socialLinks.facebook) && <div className="newsletter-actions">
-          {socialLinks.instagram && <a className="button button-outline" href={socialLinks.instagram} target="_blank" rel="noopener noreferrer">
-            <Instagram size={17} /> تابعي الحلم على إنستغرام
-          </a>}
-          {socialLinks.facebook && <a className="button button-outline" href={socialLinks.facebook} target="_blank" rel="noopener noreferrer">
-            <Facebook size={17} /> تابعي الحلم على فيسبوك
-          </a>}
-        </div>}
+        {(socialLinks.instagram || socialLinks.facebook || socialLinks.tiktok) && (
+  <div className="newsletter-actions">
+    {socialLinks.instagram && (
+      <a className="button button-outline" href={socialLinks.instagram} target="_blank" rel="noopener noreferrer">
+        <Instagram size={17} /> تابعي الحلم على إنستغرام
+      </a>
+    )}
+    {socialLinks.facebook && (
+      <a className="button button-outline" href={socialLinks.facebook} target="_blank" rel="noopener noreferrer">
+        <Facebook size={17} /> تابعي الحلم على فيسبوك
+      </a>
+    )}
+    {socialLinks.tiktok && (
+      <a className="button button-outline" href={socialLinks.tiktok} target="_blank" rel="noopener noreferrer">
+        <TikTokIcon size={17} /> تابعي الحلم على تيك توك
+      </a>
+    )}
+  </div>
+)}
       </section>
     </main>
   );
