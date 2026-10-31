@@ -1188,14 +1188,6 @@ export function AuthPage() {
             : 'لديكِ حساب؟ سجلي الدخول'}
         </button>
 
-        <button
-          type="button"
-          className="text-link auth-switch"
-          disabled={busy}
-          onClick={() => void resetPassword()}
-        >
-          نسيت كلمة المرور؟
-        </button>
       </div>
     </main>
   )
