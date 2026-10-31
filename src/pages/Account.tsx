@@ -1,11 +1,12 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, CalendarDays, Heart, LogOut, MapPin, PackageCheck, Sparkles, Trash2, Truck, UserRound } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { orderStatusLabels, type OrderStatus } from '../types'
 import { EmptyState, ToastMessage } from '../components/Common'
 import { money, categoryFallback } from '../components/Storefront'
+import { promotionPercent, promotionPrice } from '../lib/promotions'
 
 type Address = {
   id: string
@@ -124,6 +125,8 @@ export function AccountPage() {
   })
 
   const [addresses, setAddresses] = useState<Address[]>([])
+  const [accountOrders, setAccountOrders] = useState<CustomerOrder[]>([])
+  const [accountLoading, setAccountLoading] = useState(true)
 
   const [address, setAddress] = useState({
     recipient_name: '',
@@ -146,10 +149,11 @@ export function AccountPage() {
 
     if (userError || !userData.user) {
       setMessage('تعذر التحقق من الحساب.')
+      setAccountLoading(false)
       return
     }
 
-    const [profileResult, addressResult] = await Promise.all([
+    const [profileResult, addressResult, ordersResult] = await Promise.all([
       supabase
         .from('profiles')
         .select('email,full_name,phone')
@@ -159,6 +163,12 @@ export function AccountPage() {
       supabase
         .from('addresses')
         .select('id,recipient_name,phone,region,city,address_line,notes,is_default')
+        .eq('user_id', userData.user.id)
+        .order('created_at', { ascending: false }),
+
+      supabase
+        .from('orders')
+        .select('id,order_number,status,payment_status,total,deposit_amount,remaining_amount,created_at')
         .eq('user_id', userData.user.id)
         .order('created_at', { ascending: false })
     ])
@@ -174,6 +184,12 @@ export function AccountPage() {
     } else {
       setAddresses(addressResult.data ?? [])
     }
+    if (ordersResult.error) {
+      setMessage(`تعذر تحميل ملخص الطلبات: ${ordersResult.error.message}`)
+    } else {
+      setAccountOrders(ordersResult.data ?? [])
+    }
+    setAccountLoading(false)
   }
 
   useEffect(() => {
@@ -318,19 +334,45 @@ export function AccountPage() {
     }
   }
 
+  const deliveredOrders = accountOrders.filter((order) => order.status === 'delivered')
+  const deliveredTotal = deliveredOrders.reduce((sum, order) => sum + Number(order.total), 0)
+  const displayName = profile.full_name.trim().split(/\s+/)[0] || 'صديقتنا'
+  const profileCompletion = [profile.full_name, profile.phone, profile.email].filter((value) => value.trim()).length
+
   return (
     <AuthGate>
       <main className="page-main account-page">
-        <div className="page-title">
-          <p className="eyebrow">مساحتك في الحلم</p>
-          <h1>حسابي</h1>
-        </div>
+        <section className="account-welcome">
+          <div className="account-welcome-copy">
+            <p className="eyebrow"><Sparkles size={14} /> مساحتك الخاصة في الحلم</p>
+            <h1>أهلًا بكِ، <em>{displayName}</em></h1>
+            <p>من هنا يمكنك متابعة طلباتك، تحديث بياناتك، وإدارة عناوين التوصيل بكل سهولة.</p>
+          </div>
+          <div className="account-avatar" aria-hidden="true"><UserRound size={31} /></div>
+        </section>
 
         <AccountNavigation active="account" />
 
+        <section className="account-overview" aria-label="ملخص الحساب">
+          <article><span className="account-overview-icon"><PackageCheck size={18} /></span><div><small>إجمالي الطلبات</small><b>{accountLoading ? '…' : accountOrders.length}</b></div></article>
+          <article><span className="account-overview-icon"><BadgeCheck size={18} /></span><div><small>طلبات تم تسليمها</small><b>{accountLoading ? '…' : deliveredOrders.length}</b></div></article>
+          <article><span className="account-overview-icon"><MapPin size={18} /></span><div><small>عناوين التوصيل</small><b>{accountLoading ? '…' : addresses.length}</b></div></article>
+          <article className="account-spend-overview"><span className="account-overview-icon"><Sparkles size={18} /></span><div><small>قيمة مشترياتك المستلمة</small><b>{accountLoading ? '…' : money(deliveredTotal)}</b></div></article>
+        </section>
+
+        {!accountLoading && accountOrders[0] && <section className="account-latest-order">
+          <span className="account-latest-icon"><Truck size={20} /></span>
+          <div className="account-latest-copy">
+            <small>آخر طلب لكِ · #{accountOrders[0].order_number}</small>
+            <b>{orderStatusLabels[accountOrders[0].status]}</b>
+            <span>{new Date(accountOrders[0].created_at).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })} · {money(Number(accountOrders[0].total))}</span>
+          </div>
+          <Link to={`/orders/${accountOrders[0].id}`}>تفاصيل الطلب <ArrowLeft size={15} /></Link>
+        </section>}
+
         <div className="account-columns">
           <section className="admin-card">
-            <h2>بياناتك</h2>
+            <div className="account-card-heading"><span className="account-card-icon"><UserRound size={18} /></span><div><h2>بياناتك الشخصية</h2><p>تأكدي من صحة بيانات التواصل لتسهيل متابعة طلباتك.</p></div></div>
 
             <form className="account-form" onSubmit={saveProfile}>
               <label>
@@ -365,14 +407,14 @@ export function AccountPage() {
                 {busy ? 'جارٍ الحفظ...' : 'حفظ البيانات'}
               </button>
             </form>
+            <div className="profile-completion">
+              <span>اكتمال بيانات الحساب</span><b>{Math.round(profileCompletion / 3 * 100)}%</b>
+              <div><i style={{ width: `${profileCompletion / 3 * 100}%` }} /></div>
+            </div>
           </section>
 
           <section className="admin-card">
-            <h2>
-              {editingAddress
-                ? 'تعديل عنوان التوصيل'
-                : 'إضافة عنوان توصيل'}
-            </h2>
+            <div className="account-card-heading"><span className="account-card-icon"><MapPin size={18} /></span><div><h2>{editingAddress ? 'تعديل عنوان التوصيل' : 'إضافة عنوان توصيل'}</h2><p>احفظي عنوانك لتسهيل إتمام الطلبات القادمة.</p></div></div>
 
             <form className="account-form address-form" onSubmit={addAddress}>
               {(
@@ -431,7 +473,7 @@ export function AccountPage() {
           </section>
 
           <section className="admin-card address-list">
-            <h2>عناوين التوصيل</h2>
+            <div className="account-card-heading"><span className="account-card-icon"><MapPin size={18} /></span><div><h2>عناوين التوصيل</h2><p>{addresses.length ? `لديكِ ${addresses.length} ${addresses.length === 1 ? 'عنوان محفوظ' : 'عناوين محفوظة'}.` : 'أضيفي عنوانكِ لتسهيل طلبكِ القادم.'}</p></div></div>
 
             {addresses.length ? (
               addresses.map((item) => (
@@ -439,7 +481,7 @@ export function AccountPage() {
                   <div>
                     <b>{item.recipient_name}</b>
 
-                    {item.is_default && <small>العنوان الافتراضي</small>}
+                    {item.is_default && <small className="default-address-badge"><BadgeCheck size={13} /> العنوان الافتراضي</small>}
 
                     <p>
                       {item.phone} · {item.region}، {item.city}
@@ -483,7 +525,9 @@ export function AccountPage() {
           </section>
 
           <div className="account-actions">
-            <button className="text-link" onClick={() => void signOut()}>
+            <Link className="account-orders-link" to="/orders"><PackageCheck size={16} /> عرض جميع طلباتي <ArrowLeft size={15} /></Link>
+            <button className="text-link account-signout" onClick={() => void signOut()}>
+              <LogOut size={15} />
               تسجيل الخروج
             </button>
 
@@ -502,9 +546,13 @@ export function AccountPage() {
 export function OrdersPage() {
   const [orders, setOrders] = useState<CustomerOrder[]>([])
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!supabase) return
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
 
     supabase
       .from('orders')
@@ -516,6 +564,7 @@ export function OrdersPage() {
         } else {
           setOrders(data ?? [])
         }
+        setLoading(false)
       })
   }, [])
 
@@ -529,31 +578,39 @@ export function OrdersPage() {
 
         <AccountNavigation active="orders" />
 
+        {!error && !loading && orders.length > 0 && <section className="orders-overview">
+          <div><span className="orders-overview-icon"><PackageCheck size={19} /></span><small>إجمالي الطلبات</small><b>{orders.length}</b></div>
+          <div><span className="orders-overview-icon"><BadgeCheck size={19} /></span><small>تم تسليمها</small><b>{orders.filter((order) => order.status === 'delivered').length}</b></div>
+          <div><span className="orders-overview-icon"><Truck size={19} /></span><small>قيد المتابعة</small><b>{orders.filter((order) => !['delivered', 'cancelled'].includes(order.status)).length}</b></div>
+          <div><span className="orders-overview-icon"><Sparkles size={19} /></span><small>إجمالي المشتريات</small><b>{money(orders.filter((order) => order.status === 'delivered').reduce((sum, order) => sum + Number(order.total), 0))}</b></div>
+        </section>}
+
         {error ? (
           <EmptyState title="حدث خطأ" message={error} />
+        ) : loading ? (
+          <div className="orders-loading"><span /><span /><span /></div>
         ) : orders.length ? (
           <div className="orders-list">
-            {orders.map((order) => (
-              <Link
-                className="order-row"
-                key={order.id}
-                to={`/orders/${order.id}`}
-              >
-                <div>
-                  <b>طلب رقم {order.order_number}</b>
-                  <small>
-                    {new Date(order.created_at).toLocaleDateString('ar-SA')}
-                  </small>
+            {orders.map((order) => {
+              const statusTone = order.status === 'delivered'
+                ? 'delivered'
+                : order.status === 'cancelled'
+                  ? 'cancelled'
+                  : ['shipped', 'out_for_delivery'].includes(order.status)
+                    ? 'shipping'
+                    : ['deposit_confirmed', 'preparing'].includes(order.status)
+                      ? 'processing'
+                      : 'pending'
+              return <Link className="order-row" key={order.id} to={`/orders/${order.id}`}>
+                <span className={`order-row-icon order-tone-${statusTone}`}><PackageCheck size={21} /></span>
+                <div className="order-row-main">
+                  <div className="order-row-title"><b>طلب رقم #{order.order_number}</b><span className={`status-pill status-${statusTone}`}>{orderStatusLabels[order.status]}</span></div>
+                  <small><CalendarDays size={13} /> {new Date(order.created_at).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })}</small>
                 </div>
-
-                <span className="status-pill">
-                  {orderStatusLabels[order.status]}
-                </span>
-
-                <b>{money(order.total)}</b>
-                <ArrowLeft size={16} />
+                <div className="order-row-payment"><small>إجمالي الطلب</small><b>{money(Number(order.total))}</b><span>العربون {money(Number(order.deposit_amount))}</span></div>
+                <span className="order-row-arrow"><ArrowLeft size={17} /></span>
               </Link>
-            ))}
+            })}
           </div>
         ) : (
           <EmptyState
@@ -580,18 +637,24 @@ export function FavoritesPage() {
       slug: string
       price: number
       images: { image_url: string }[]
+      category: { promotions: { discount_percent: number }[] | null }[] | null
     }[]
   >([])
 
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [removingId, setRemovingId] = useState<string | null>(null)
 
   const load = async () => {
-    if (!supabase) return
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
 
     const { data, error: resultError } = await supabase
       .from('favorites')
       .select(
-        'product:products(id,name,slug,price,images:product_images(image_url,position))'
+        'product:products(id,name,slug,price,category:categories(promotions(discount_percent)),images:product_images(image_url,position))'
       )
 
     if (resultError) {
@@ -599,6 +662,7 @@ export function FavoritesPage() {
     } else {
       setProducts((data ?? []).flatMap((item) => item.product))
     }
+    setLoading(false)
   }
 
   useEffect(() => {
@@ -606,8 +670,9 @@ export function FavoritesPage() {
   }, [])
 
   const remove = async (productId: string) => {
-    if (!supabase) return
+    if (!supabase || removingId) return
 
+    setRemovingId(productId)
     const { error: resultError } = await supabase
       .from('favorites')
       .delete()
@@ -616,8 +681,9 @@ export function FavoritesPage() {
     if (resultError) {
       setError(`تعذر حذف المنتج: ${resultError.message}`)
     } else {
-      await load()
+      setProducts((current) => current.filter((product) => product.id !== productId))
     }
+    setRemovingId(null)
   }
 
   return (
@@ -632,24 +698,32 @@ export function FavoritesPage() {
 
         {error ? (
           <EmptyState title="حدث خطأ" message={error} />
+        ) : loading ? (
+          <div className="favorite-loading"><span /><span /><span /></div>
         ) : products.length ? (
           <div className="favorite-list">
             {products.map((product, index) => (
               <div className="favorite-row" key={product.id}>
-                <Link to={`/products/${product.slug}`}>
+                <Link className="favorite-product-link" to={`/products/${product.slug}`}>
                   <img
                     src={product.images[0]?.image_url || categoryFallback(index)}
                     alt={product.name}
                   />
 
-                  <span>
+                  <span className="favorite-product-copy">
+                    <small className="favorite-kicker"><Heart size={12} fill="currentColor" /> محفوظة في المفضلة</small>
                     <b>{product.name}</b>
-                    <small>{money(product.price)}</small>
+                    <span className="favorite-price">
+                      <strong>{money(promotionPrice(product.price, product.category?.[0]?.promotions))}</strong>
+                      {promotionPercent(product.category?.[0]?.promotions) > 0 && <del>{money(product.price)}</del>}
+                    </span>
+                    {promotionPercent(product.category?.[0]?.promotions) > 0 && <span className="favorite-discount">خصم {promotionPercent(product.category?.[0]?.promotions)}%</span>}
+                    <span className="favorite-view">عرض التفاصيل <ArrowLeft size={14} /></span>
                   </span>
                 </Link>
 
-                <button onClick={() => void remove(product.id)}>
-                  إزالة
+                <button className="favorite-remove" disabled={removingId === product.id} aria-label={`إزالة ${product.name} من المفضلة`} onClick={() => void remove(product.id)}>
+                  <Trash2 size={16} /><span>{removingId === product.id ? 'جارٍ الإزالة' : 'إزالة'}</span>
                 </button>
               </div>
             ))}
@@ -1179,6 +1253,7 @@ type OrderHistory = {
 
 type OrderRecord = CustomerOrder & {
   subtotal: number
+  discount_amount: number
   delivery_fee: number
   address_snapshot: Record<string, string>
   customer_note: string | null
@@ -1211,7 +1286,7 @@ export function OrderDetailsPage() {
     const { data, error } = await supabase
       .from('orders')
       .select(
-        'id,order_number,status,payment_status,total,deposit_amount,remaining_amount,subtotal,delivery_fee,address_snapshot,customer_note,created_at,items:order_items(id,product_name,size,color,unit_price,quantity,line_total),history:order_status_history(status,note,created_at),payment_receipts(id,storage_path,created_at)'
+        'id,order_number,status,payment_status,total,deposit_amount,remaining_amount,subtotal,discount_amount,delivery_fee,address_snapshot,customer_note,created_at,items:order_items(id,product_name,size,color,unit_price,quantity,line_total),history:order_status_history(status,note,created_at),payment_receipts(id,storage_path,created_at)'
       )
       .eq('id', id)
       .maybeSingle()
@@ -1405,6 +1480,28 @@ export function OrderDetailsPage() {
                 <h2>ملخص الدفع</h2>
 
                 <div className="order-summary-lines">
+                  <div>
+                    <span>قيمة المنتجات قبل الخصم</span>
+                    <b>{money(Number(order.subtotal) + Number(order.discount_amount || 0))}</b>
+                  </div>
+
+                  {Number(order.discount_amount) > 0 && (
+                    <div className="order-discount-line">
+                      <span>خصم العروض</span>
+                      <b>− {money(order.discount_amount)}</b>
+                    </div>
+                  )}
+
+                  <div>
+                    <span>قيمة المنتجات بعد الخصم</span>
+                    <b>{money(order.subtotal)}</b>
+                  </div>
+
+                  <div>
+                    <span>التوصيل</span>
+                    <b>{money(order.delivery_fee)}</b>
+                  </div>
+
                   <div>
                     <span>إجمالي الطلب</span>
                     <b>{money(order.total)}</b>

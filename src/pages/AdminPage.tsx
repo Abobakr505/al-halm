@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from "react-router-dom";
-import { Images, Plus, Upload, X } from "lucide-react";
+import { Images, Percent, Plus, Trash2, Upload, X } from "lucide-react";
 import { EmptyState, ToastMessage } from "../components/Common";
 import { money } from "../components/Storefront";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
@@ -20,6 +20,9 @@ type AdminOrder = {
   order_number: number;
   status: OrderStatus;
   payment_status: string;
+  subtotal?: number;
+  discount_amount?: number;
+  delivery_fee?: number;
   total: number;
   deposit_amount: number;
   remaining_amount: number;
@@ -53,14 +56,21 @@ type AdminImage = {
 };
 
 const IMAGE_BUCKET = "product-images";
+const AdminDeleteContext = createContext<((name: string) => Promise<boolean>) | null>(null);
 
-async function uploadImage(file: File, folder: string) {
+function useAdminDeleteConfirmation() {
+  const confirmDelete = useContext(AdminDeleteContext);
+  if (!confirmDelete) throw new Error("تأكيد الحذف متاح داخل لوحة التحكم فقط.");
+  return confirmDelete;
+}
+
+async function uploadImage(file: File, folder: string, bucket = IMAGE_BUCKET) {
   if (!supabase) throw new Error("تعذر الاتصال بمخزن الصور.");
 
   const fileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${folder}/${crypto.randomUUID()}-${fileName}`;
   const { error } = await supabase.storage
-    .from(IMAGE_BUCKET)
+    .from(bucket)
     .upload(path, file, {
       contentType: file.type,
       cacheControl: "3600",
@@ -71,7 +81,7 @@ async function uploadImage(file: File, folder: string) {
 
   return {
     path,
-    url: supabase.storage.from(IMAGE_BUCKET).getPublicUrl(path).data.publicUrl,
+    url: supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl,
   };
 }
 
@@ -189,6 +199,29 @@ function AdminLayout({
 }) {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [error, setError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<{
+    name: string;
+    resolve: (confirmed: boolean) => void;
+  } | null>(null);
+  const requestDeleteConfirmation = (name: string) =>
+    new Promise<boolean>((resolve) => setDeleteTarget({ name, resolve }));
+  const finishDeleteConfirmation = (confirmed: boolean) => {
+    deleteTarget?.resolve(confirmed);
+    setDeleteTarget(null);
+  };
+  useEffect(() => {
+    if (!deleteTarget) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") finishDeleteConfirmation(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [deleteTarget]);
   useEffect(() => {
     if (!supabase) {
       setIsAdmin(false);
@@ -227,12 +260,14 @@ function AdminLayout({
       </main>
     );
   return (
+    <AdminDeleteContext.Provider value={requestDeleteConfirmation}>
+      <>
     <main className="page-main admin-page">
       <div className="page-title">
         <p className="eyebrow">إدارة متجر الحلم</p>
         <h1>لوحة التحكم</h1>
       </div>
-      <nav className="admin-tabs">
+      <nav className="admin-tabs" aria-label="أقسام لوحة التحكم">
         <Link className={active === "dashboard" ? "active" : ""} to="/admin">
           نظرة عامة
         </Link>
@@ -247,6 +282,12 @@ function AdminLayout({
           to="/admin/categories"
         >
           الأقسام
+        </Link>
+        <Link
+          className={active === "promotions" ? "active" : ""}
+          to="/admin/promotions"
+        >
+          العروض
         </Link>
         <Link
           className={active === "orders" ? "active" : ""}
@@ -269,78 +310,173 @@ function AdminLayout({
       </nav>
       {children}
     </main>
+    {deleteTarget && (
+      <div
+        className="admin-confirm-backdrop"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) finishDeleteConfirmation(false);
+        }}
+      >
+        <section
+          className="admin-confirm-dialog"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="admin-delete-title"
+          aria-describedby="admin-delete-description"
+        >
+          <span className="admin-confirm-icon"><Trash2 size={22} /></span>
+          <p className="eyebrow">تأكيد الحذف</p>
+          <h2 id="admin-delete-title">هل تريدين حذف هذا العنصر؟</h2>
+          <p id="admin-delete-description">
+            سيتم حذف <b>{deleteTarget.name}</b> نهائيًا، ولا يمكن التراجع عن هذا الإجراء.
+          </p>
+          <div className="admin-confirm-actions">
+            <button type="button" className="admin-confirm-cancel" onClick={() => finishDeleteConfirmation(false)}>تراجُع</button>
+            <button type="button" className="admin-confirm-delete" onClick={() => finishDeleteConfirmation(true)}><Trash2 size={15} /> نعم، احذف</button>
+          </div>
+        </section>
+      </div>
+    )}
+      </>
+    </AdminDeleteContext.Provider>
   );
 }
 
 function Dashboard() {
-  const [stats, setStats] = useState<{ label: string; value: string }[]>([]);
+  const [stats, setStats] = useState<{ label: string; value: string; note: string }[]>([]);
+  const [statusCounts, setStatusCounts] = useState<{ status: OrderStatus; count: number }[]>([]);
+  const [recentOrders, setRecentOrders] = useState<{ id: string; order_number: number; status: OrderStatus; total: number; created_at: string }[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    if (!supabase) return;
-    Promise.all([
-      supabase.from("orders").select("id,status,total"),
-      supabase.from("profiles").select("id", { count: "exact", head: true }),
-      supabase
-        .from("products")
-        .select("id", { count: "exact", head: true })
-        .eq("is_active", true),
-    ]).then(([orders, customers, products]) => {
-      if (orders.error || customers.error || products.error) {
-        setError(
-          `تعذر تحميل الإحصائيات: ${orders.error?.message || customers.error?.message || products.error?.message}`,
-        );
+    if (!supabase) {
+      setLoading(false);
+      setError("إعدادات Supabase غير متاحة.");
+      return;
+    }
+    const client = supabase;
+    let active = true;
+    const load = async () => {
+      setLoading(true);
+      setError("");
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - 6);
+      weekStart.setHours(0, 0, 0, 0);
+
+      const monthOrdersPromise = async () => {
+        const rows: { status: OrderStatus; total: number; created_at: string }[] = [];
+        for (let offset = 0; ; offset += 1000) {
+          const result = await client.from("orders").select("status,total,created_at")
+            .gte("created_at", monthStart.toISOString())
+            .order("created_at", { ascending: false })
+            .range(offset, offset + 999);
+          if (result.error) return { data: null, error: result.error };
+          rows.push(...(result.data ?? []) as typeof rows);
+          if ((result.data ?? []).length < 1000) return { data: rows, error: null };
+        }
+      };
+      const [monthOrders, recent, allOrders, customers, products, variants, promotions] = await Promise.all([
+        monthOrdersPromise(),
+        client.from("orders").select("id,order_number,status,total,created_at").order("created_at", { ascending: false }).limit(8),
+        client.from("orders").select("id", { count: "exact", head: true }),
+        client.from("profiles").select("id", { count: "exact", head: true }),
+        client.from("products").select("id", { count: "exact", head: true }).eq("is_active", true),
+        client.from("product_variants").select("id", { count: "exact", head: true }).gt("stock", 0).lte("stock", 3),
+        client.from("promotions").select("id", { count: "exact", head: true }).eq("is_active", true).lte("starts_at", new Date().toISOString()).or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`),
+      ]);
+      const failed = [monthOrders, recent, allOrders, customers, products, variants, promotions].find((result) => result.error);
+      if (!active) return;
+      if (failed?.error) {
+        setError(`تعذر تحميل تقارير النظرة العامة: ${failed.error.message}`);
+        setLoading(false);
         return;
       }
-      const all = orders.data ?? [];
+
+      const ordersThisMonth = monthOrders.data ?? [];
+      const deliveredThisMonth = ordersThisMonth.filter((order) => order.status === "delivered");
+      const salesThisMonth = deliveredThisMonth.reduce((sum, order) => sum + Number(order.total), 0);
+      const salesThisWeek = deliveredThisMonth
+        .filter((order) => new Date(order.created_at) >= weekStart)
+        .reduce((sum, order) => sum + Number(order.total), 0);
+      const reviewCount = ordersThisMonth.filter((order) => order.status === "awaiting_deposit_review").length;
+      const waitingCount = ordersThisMonth.filter((order) => order.status === "received").length;
+      const lowStockVariants = variants.count ?? 0;
+      const statusSummary = ORDER_STATUSES.map(([status]) => ({
+        status,
+        count: ordersThisMonth.filter((order) => order.status === status).length,
+      })).filter((item) => item.count > 0);
+
       setStats([
-        {
-          label: "إجمالي المبيعات",
-          value: money(
-            all
-              .filter((item) => item.status === "delivered")
-              .reduce((sum, item) => sum + Number(item.total), 0),
-          ),
-        },
-        { label: "كل الطلبات", value: String(all.length) },
-        {
-          label: "تحتاج متابعة",
-          value: String(
-            all.filter((item) =>
-              ["received", "awaiting_deposit_review"].includes(item.status),
-            ).length,
-          ),
-        },
-        { label: "العملاء", value: String(customers.count ?? 0) },
-        { label: "المنتجات المنشورة", value: String(products.count ?? 0) },
+        { label: "مبيعات الشهر", value: money(salesThisMonth), note: "للطلبات التي تم تسليمها" },
+        { label: "مبيعات آخر 7 أيام", value: money(salesThisWeek), note: "من الطلبات المسلّمة" },
+        { label: "طلبات هذا الشهر", value: String(ordersThisMonth.length), note: "منذ بداية الشهر" },
+        { label: "إجمالي الطلبات", value: String(allOrders.count ?? 0), note: "كل الطلبات المسجلة" },
+        { label: "بانتظار مراجعة العربون", value: String(reviewCount), note: "تحتاج مراجعة الإيصال" },
+        { label: "طلبات جديدة", value: String(waitingCount), note: "تحتاج بدء المعالجة" },
+        { label: "العملاء", value: String(customers.count ?? 0), note: "حسابات مسجلة" },
+        { label: "المنتجات المنشورة", value: String(products.count ?? 0), note: "منتجات ظاهرة بالمتجر" },
+        { label: "خيارات منخفضة المخزون", value: String(lowStockVariants), note: "المخزون 3 قطع أو أقل" },
+        { label: "عروض سارية", value: String(promotions.count ?? 0), note: "عروض مفعّلة الآن" },
       ]);
-    });
+      setStatusCounts(statusSummary);
+      setRecentOrders((recent.data ?? []) as typeof recentOrders);
+      setLoading(false);
+    };
+    void load();
+    return () => { active = false; };
   }, []);
+
   return (
-    <>
+    <div className="dashboard-content">
+      {error && <ToastMessage message={error} />}
+      {loading && <p className="muted-copy">جارٍ تحميل التقارير…</p>}
       <div className="stats-grid">
         {stats.map((item) => (
           <section className="admin-card stat-card" key={item.label}>
             <span>{item.label}</span>
             <b>{item.value}</b>
+            <small>{item.note}</small>
           </section>
         ))}
       </div>
-      {error && <ToastMessage message={error} />}
-      <section className="admin-card">
-        <h2>متابعة سريعة</h2>
-        <p className="muted-copy">
-          استخدمي أقسام لوحة التحكم لإدارة المنتجات والأقسام ومراجعة الطلبات
-          وإيصالات العربون.
-        </p>
-        <Link className="button button-dark" to="/admin/orders">
-          عرض الطلبات
-        </Link>
+      <div className="dashboard-report-grid">
+        <section className="admin-card dashboard-status-card">
+          <div className="dashboard-card-heading"><div><p className="eyebrow">حركة الشهر</p><h2>حالة الطلبات</h2></div><Link to="/admin/orders">كل الطلبات</Link></div>
+          {statusCounts.length ? <div className="dashboard-status-list">{statusCounts.map(({ status, count }) => {
+            const total = statusCounts.reduce((sum, item) => sum + item.count, 0);
+            return <div className="dashboard-status-row" key={status}>
+              <span>{orderStatusLabels[status]}</span>
+              <div><i style={{ width: `${total ? Math.max(5, count / total * 100) : 0}%` }} /></div>
+              <b>{count}</b>
+            </div>;
+          })}</div> : <p className="muted-copy">لا توجد طلبات مسجلة هذا الشهر.</p>}
+        </section>
+        <section className="admin-card dashboard-shortcuts">
+          <p className="eyebrow">إدارة المتجر</p><h2>وصول سريع</h2>
+          <Link to="/admin/orders">مراجعة الطلبات <span>›</span></Link>
+          <Link to="/admin/products">إدارة المنتجات <span>›</span></Link>
+          <Link to="/admin/promotions">إدارة العروض <span>›</span></Link>
+        </section>
+      </div>
+      <section className="admin-card dashboard-recent-orders">
+        <div className="dashboard-card-heading"><div><p className="eyebrow">أحدث النشاطات</p><h2>آخر الطلبات</h2></div><Link to="/admin/orders">عرض الكل <span>←</span></Link></div>
+        {recentOrders.length ? <div className="dashboard-order-list">{recentOrders.map((order) => <Link className="dashboard-order-row" to={`/admin/orders/${order.id}`} key={order.id}>
+          <b>طلب #{order.order_number}</b>
+          <span>{new Date(order.created_at).toLocaleDateString("ar-EG", { day: "numeric", month: "short", year: "numeric" })}</span>
+          <span className={`dashboard-order-status status-${order.status}`}>{orderStatusLabels[order.status]}</span>
+          <strong>{money(Number(order.total))}</strong>
+        </Link>)}</div> : <p className="muted-copy">لا توجد طلبات حتى الآن.</p>}
       </section>
-    </>
+    </div>
   );
 }
 
 function ProductManagement() {
+  const confirmDelete = useAdminDeleteConfirmation();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
@@ -669,7 +805,7 @@ for (const [index, image] of images.entries()) {
   };
 
   const removeProduct = async (product: Product) => {
-    if (!supabase || !window.confirm(`حذف المنتج «${product.name}»؟`)) return;
+    if (!supabase || !(await confirmDelete(product.name))) return;
     const { error } = await supabase
       .from("products")
       .delete()
@@ -713,7 +849,7 @@ for (const [index, image] of images.entries()) {
 
   return (
     <>
-      <section className="admin-card">
+      <section className="admin-card product-editor-card">
         <h2>{editing ? "تعديل منتج" : "إضافة منتج"}</h2>
         <form className="product-admin-form" onSubmit={save}>
           <label>
@@ -995,21 +1131,21 @@ for (const [index, image] of images.entries()) {
         </form>
         {message && <ToastMessage message={message} />}
       </section>
-      <section className="admin-card">
-        <h2>المنتجات</h2>
+      <section className="admin-card product-list-card">
+        <div className="admin-section-heading"><div><p className="eyebrow">كتالوج المتجر</p><h2>المنتجات</h2></div><span>{products.length} منتج</span></div>
         {products.length ? (
-          products.map((product) => (
-            <div className="admin-row" key={product.id}>
+          <div className="admin-product-list">{products.map((product) => (
+            <div className="admin-row product-admin-row" key={product.id}>
               <span>{product.name}</span>
               <span>{money(product.price)}</span>
-              <span>{product.is_active ? "منشور" : "مسودة"}</span>
-              <button onClick={() => void edit(product)}>تعديل</button>
-              <button onClick={() => void toggleProduct(product)}>
+              <span className={`admin-visibility ${product.is_active ? "is-published" : "is-draft"}`}>{product.is_active ? "منشور" : "مسودة"}</span>
+              <button className="admin-row-edit" onClick={() => void edit(product)}>تعديل</button>
+              <button className="admin-row-toggle" onClick={() => void toggleProduct(product)}>
                 {product.is_active ? "إخفاء" : "نشر"}
               </button>
-              <button onClick={() => void removeProduct(product)}>حذف</button>
+              <button className="admin-row-delete" onClick={() => void removeProduct(product)}>حذف</button>
             </div>
-          ))
+          ))}</div>
         ) : (
           <p className="muted-copy">لا توجد منتجات بعد.</p>
         )}
@@ -1019,6 +1155,7 @@ for (const [index, image] of images.entries()) {
 }
 
 function CategoryManagement() {
+  const confirmDelete = useAdminDeleteConfirmation();
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [editingImagePath, setEditingImagePath] = useState<string | null>(null);
@@ -1124,7 +1261,7 @@ if (imageFile) {
   };
   return (
     <>
-      <section className="admin-card">
+      <section className="admin-card admin-orders-card">
         <h2>{editing ? "تعديل القسم" : "إضافة قسم"}</h2>
         <form className="admin-form category-admin-form" onSubmit={save}>
           <label>
@@ -1253,7 +1390,7 @@ if (imageFile) {
             </button>
             <button
               onClick={async () => {
-                if (!supabase || !window.confirm(`حذف القسم ${category.name}؟`))
+                if (!supabase || !(await confirmDelete(category.name)))
                   return;
                 const { error } = await supabase
                   .from("categories")
@@ -1369,7 +1506,7 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
       const { data: orderData, error: orderError } = await supabase
         .from("orders")
         .select(
-          "id,user_id,order_number,status,payment_status,total,deposit_amount,remaining_amount,created_at,customer_note,internal_note,address_snapshot",
+          "id,user_id,order_number,status,payment_status,subtotal,discount_amount,delivery_fee,total,deposit_amount,remaining_amount,created_at,customer_note,internal_note,address_snapshot",
         )
         .eq("id", id)
         .maybeSingle();
@@ -1508,9 +1645,9 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
       </section>
     );
   return (
-    <>
+    <div className="admin-order-details">
       {message && <ToastMessage message={message} />}
-      <section className="admin-card">
+      <section className="admin-card admin-order-overview">
         <div className="order-detail-heading">
           <h2>طلب رقم {order.order_number}</h2>
           <span className="status-pill">{orderStatusLabels[order.status]}</span>
@@ -1531,7 +1668,7 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
         </p>
         {order.customer_note && <p>ملاحظة العميل: {order.customer_note}</p>}
       </section>
-      <section className="admin-card">
+      <section className="admin-card admin-order-items">
         <h2>المنتجات والمبالغ</h2>
         {order.items?.length ? (
           order.items.map((item, index) => (
@@ -1547,6 +1684,24 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
           <p className="muted-copy">لا توجد تفاصيل منتجات مسجلة لهذا الطلب.</p>
         )}
         <div className="order-summary-lines">
+          <div>
+            <span>قيمة المنتجات قبل الخصم</span>
+            <b>{money(Number(order.subtotal || 0) + Number(order.discount_amount || 0))}</b>
+          </div>
+          {Number(order.discount_amount) > 0 && (
+            <div className="order-discount-line">
+              <span>خصم العروض</span>
+              <b>− {money(Number(order.discount_amount))}</b>
+            </div>
+          )}
+          <div>
+            <span>قيمة المنتجات بعد الخصم</span>
+            <b>{money(Number(order.subtotal || 0))}</b>
+          </div>
+          <div>
+            <span>التوصيل</span>
+            <b>{money(Number(order.delivery_fee || 0))}</b>
+          </div>
           <div>
             <span>الإجمالي</span>
             <b>{money(order.total)}</b>
@@ -1565,7 +1720,7 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
           </div>
         </div>
       </section>
-      <section className="admin-card">
+      <section className="admin-card admin-receipt-review">
         <h2>مراجعة العربون</h2>
         {receiptUrl ? (
           <a href={receiptUrl} target="_blank" rel="noreferrer">
@@ -1604,7 +1759,7 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
           </button>
         </div>
       </section>
-      <section className="admin-card">
+      <section className="admin-card admin-order-update">
         <h2>تحديث حالة الطلب</h2>
         <div className="admin-form">
           <label>
@@ -1641,7 +1796,7 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
         </div>
         {message && <ToastMessage message={message} />}
       </section>
-    </>
+    </div>
   );
 }
 
@@ -1723,6 +1878,236 @@ function CustomerManagement() {
         <p className="muted-copy">لا توجد حسابات عملاء.</p>
       )}
     </section>
+  );
+}
+
+type PromotionRecord = {
+  id: string;
+  title: string;
+  description: string | null;
+  category_id: string;
+  discount_percent: number;
+  image_url: string | null;
+  storage_path: string | null;
+  starts_at: string;
+  ends_at: string | null;
+  is_active: boolean;
+};
+
+function localDateTimeValue(value: Date) {
+  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function PromotionManagement() {
+  const confirmDelete = useAdminDeleteConfirmation();
+  const [promotions, setPromotions] = useState<PromotionRecord[]>([]);
+  const [categories, setCategories] = useState<AdminCategory[]>([]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [image, setImage] = useState<File | null>(null);
+  const [form, setForm] = useState({
+    title: "",
+    description: "",
+    category_id: "",
+    discount_percent: "10",
+    starts_at: localDateTimeValue(new Date()),
+    ends_at: "",
+    is_active: true,
+  });
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    if (!supabase) return;
+    const [offerResult, categoryResult] = await Promise.all([
+      supabase
+        .from("promotions")
+        .select("id,title,description,category_id,discount_percent,image_url,storage_path,starts_at,ends_at,is_active")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("categories")
+        .select("id,name,slug,description,image_url")
+        .eq("is_active", true)
+        .order("position"),
+    ]);
+    if (offerResult.error || categoryResult.error) {
+      setMessage(`تعذر تحميل العروض: ${offerResult.error?.message || categoryResult.error?.message}`);
+      return;
+    }
+    setPromotions((offerResult.data ?? []) as PromotionRecord[]);
+    setCategories((categoryResult.data ?? []) as AdminCategory[]);
+  };
+
+  useEffect(() => { void load(); }, []);
+
+  const reset = () => {
+    setEditing(null);
+    setImage(null);
+    setForm({
+      title: "",
+      description: "",
+      category_id: "",
+      discount_percent: "10",
+      starts_at: localDateTimeValue(new Date()),
+      ends_at: "",
+      is_active: true,
+    });
+  };
+
+  const edit = (promotion: PromotionRecord) => {
+    setEditing(promotion.id);
+    setImage(null);
+    setForm({
+      title: promotion.title,
+      description: promotion.description || "",
+      category_id: promotion.category_id,
+      discount_percent: String(promotion.discount_percent),
+      starts_at: localDateTimeValue(new Date(promotion.starts_at)),
+      ends_at: promotion.ends_at ? localDateTimeValue(new Date(promotion.ends_at)) : "",
+      is_active: promotion.is_active,
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!supabase || busy) return;
+    const discount = Number(form.discount_percent);
+    const startsAt = new Date(form.starts_at);
+    const endsAt = form.ends_at ? new Date(form.ends_at) : null;
+    if (!form.title.trim() || !form.category_id || !Number.isFinite(discount) || discount <= 0 || discount > 100) {
+      setMessage("أدخلي عنوان العرض، واختاري القسم، وحددي خصمًا من 1% إلى 100%.");
+      return;
+    }
+    if (!Number.isFinite(startsAt.getTime()) || endsAt && (!Number.isFinite(endsAt.getTime()) || endsAt <= startsAt)) {
+      setMessage("تحققي من تاريخ بداية العرض ونهايته.");
+      return;
+    }
+    if (image && (image.size > 20 * 1024 * 1024 || !["image/jpeg", "image/png", "image/webp"].includes(image.type))) {
+      setMessage("صورة العرض يجب أن تكون JPG أو PNG أو WebP وبحجم أقصى 20 ميجابايت.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("");
+    const current = promotions.find((promotion) => promotion.id === editing);
+    let uploadedPath: string | null = null;
+    let imageUrl = current?.image_url || null;
+    try {
+      if (image) {
+        const uploaded = await uploadImage(image, "offers", "promotion-images");
+        uploadedPath = uploaded.path;
+        imageUrl = uploaded.url;
+      }
+    } catch (error) {
+      setBusy(false);
+      setMessage(error instanceof Error ? error.message : "تعذر رفع صورة العرض.");
+      return;
+    }
+
+    const values = {
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      category_id: form.category_id,
+      discount_percent: discount,
+      image_url: imageUrl,
+      storage_path: uploadedPath || current?.storage_path || null,
+      starts_at: startsAt.toISOString(),
+      ends_at: endsAt?.toISOString() || null,
+      is_active: form.is_active,
+      updated_at: new Date().toISOString(),
+    };
+    const result = editing
+      ? await supabase.from("promotions").update(values).eq("id", editing)
+      : await supabase.from("promotions").insert(values);
+    if (result.error) {
+      let cleanupMessage = "";
+      if (uploadedPath) {
+        const { error: cleanupError } = await supabase.storage
+          .from("promotion-images")
+          .remove([uploadedPath]);
+        if (cleanupError) cleanupMessage = `تعذر حذف الصورة المرفوعة غير المستخدمة: ${cleanupError.message}`;
+      }
+      setBusy(false);
+      setMessage(`تعذر حفظ العرض: ${result.error.message}${cleanupMessage ? ` · ${cleanupMessage}` : ""}`);
+      return;
+    }
+
+    if (uploadedPath && current?.storage_path) {
+      const { error } = await supabase.storage.from("promotion-images").remove([current.storage_path]);
+      if (error) setMessage(`تم حفظ العرض لكن تعذر حذف صورته القديمة: ${error.message}`);
+    } else {
+      setMessage(editing ? "تم تحديث العرض." : "تمت إضافة العرض.");
+    }
+    setBusy(false);
+    reset();
+    await load();
+  };
+
+  const toggle = async (promotion: PromotionRecord) => {
+    if (!supabase) return;
+    const { error } = await supabase
+      .from("promotions")
+      .update({ is_active: !promotion.is_active, updated_at: new Date().toISOString() })
+      .eq("id", promotion.id);
+    if (error) setMessage(`تعذر تحديث العرض: ${error.message}`);
+    else await load();
+  };
+
+  const remove = async (promotion: PromotionRecord) => {
+    if (!supabase || !(await confirmDelete(promotion.title))) return;
+    const { error } = await supabase.from("promotions").delete().eq("id", promotion.id);
+    if (error) {
+      setMessage(`تعذر حذف العرض: ${error.message}`);
+      return;
+    }
+    if (promotion.storage_path) {
+      const { error: imageError } = await supabase.storage
+        .from("promotion-images")
+        .remove([promotion.storage_path]);
+      if (imageError) setMessage(`حُذف العرض لكن تعذر حذف صورته: ${imageError.message}`);
+    }
+    await load();
+  };
+
+  return (
+    <>
+      <section className="admin-card">
+        <h2>{editing ? "تعديل العرض" : "إضافة عرض خصم"}</h2>
+        <p className="muted-copy">اختاري قسمًا ونسبة خصم، وسيُطبّق العرض تلقائيًا على منتجاته خلال مدته.</p>
+        <form className="promotion-form" onSubmit={(event) => void save(event)}>
+          <label>عنوان العرض<input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></label>
+          <label>القسم<select required value={form.category_id} onChange={(event) => setForm({ ...form, category_id: event.target.value })}><option value="">اختاري القسم</option>{categories.map((category) => <option value={category.id} key={category.id}>{category.name}</option>)}</select></label>
+          <label>نسبة الخصم (%)<span className="promotion-percent-input"><input required type="number" min="1" max="100" step="0.01" value={form.discount_percent} onChange={(event) => setForm({ ...form, discount_percent: event.target.value })} /><Percent size={15} /></span></label>
+          <label>بداية العرض<input required type="datetime-local" value={form.starts_at} onChange={(event) => setForm({ ...form, starts_at: event.target.value })} /></label>
+          <label>نهاية العرض <small>(اختياري)</small><input type="datetime-local" value={form.ends_at} onChange={(event) => setForm({ ...form, ends_at: event.target.value })} /></label>
+          <label className="promotion-image-field">صورة العرض<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImage(event.target.files?.[0] || null)} /><small>{image?.name || "JPG أو PNG أو WebP · بحد أقصى 20 ميجابايت"}</small></label>
+          <label className="wide-field">وصف العرض<textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
+          <label className="promotion-active-field"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} /> تفعيل العرض في موعده</label>
+          <div className="promotion-actions wide-field">
+            <button className="button button-dark" disabled={busy}>{busy ? "جارٍ الحفظ…" : editing ? "حفظ التعديلات" : "إضافة العرض"}</button>
+            {editing && <button className="button button-outline" type="button" onClick={reset}>إلغاء</button>}
+          </div>
+        </form>
+        {message && <ToastMessage message={message} />}
+      </section>
+      <section className="admin-card">
+        <h2>العروض</h2>
+        {promotions.length ? <div className="promotion-admin-list">{promotions.map((promotion) => (
+          <article className="promotion-admin-row" key={promotion.id}>
+            {promotion.image_url ? <img src={promotion.image_url} alt="" /> : <span className="promotion-admin-placeholder"><Percent /></span>}
+            <div className="promotion-admin-copy">
+              <b>{promotion.title}</b>
+              <span>{categories.find((category) => category.id === promotion.category_id)?.name || "قسم غير متاح"} · خصم {promotion.discount_percent}%</span>
+              <small>{promotion.is_active ? "مفعّل" : "متوقف"} · يبدأ {new Date(promotion.starts_at).toLocaleString("ar-EG")}{promotion.ends_at ? ` · ينتهي ${new Date(promotion.ends_at).toLocaleString("ar-EG")}` : ""}</small>
+            </div>
+            <button type="button" onClick={() => edit(promotion)}>تعديل</button>
+            <button type="button" onClick={() => void toggle(promotion)}>{promotion.is_active ? "إيقاف" : "تفعيل"}</button>
+            <button type="button" aria-label={`حذف ${promotion.title}`} onClick={() => void remove(promotion)}><Trash2 size={15} /></button>
+          </article>
+        ))}</div> : <p className="muted-copy">لم تتم إضافة عروض بعد.</p>}
+      </section>
+    </>
   );
 }
 
@@ -1954,6 +2339,8 @@ export default function AdminPage() {
         <ProductManagement />
       ) : active === "categories" ? (
         <CategoryManagement />
+      ) : active === "promotions" ? (
+        <PromotionManagement />
       ) : active === "orders" ? (
         <OrderManagement />
       ) : active === "customers" ? (

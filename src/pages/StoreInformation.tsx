@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertCircle, ArrowLeft, Heart, Instagram, Mail, Phone, Sparkles } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Facebook, Heart, Instagram, Mail, MessageCircle, Phone, Sparkles } from 'lucide-react'
 import { EmptyState, InfoPage } from '../components/Common'
 import { supabase } from '../lib/supabase'
 
@@ -11,6 +11,7 @@ type StoreSettings = {
   contact_phone: string | null
   contact_email: string | null
   instagram_url: string | null
+  facebook_url: string | null
   return_policy: string | null
   privacy_policy: string | null
 }
@@ -22,6 +23,53 @@ type StoreInformationProps = {
 const DEFAULT_STORE_NAME = 'متجر الحلم'
 const DEFAULT_ABOUT_TEXT =
   'في الحلم، نختار القماش والقصّة والتطريز بعناية؛ لتكون عبايتك رفيقة أيامك الجميلة.'
+
+function ContactFaqs() {
+  const [openQuestions, setOpenQuestions] = useState<number[]>([])
+  const questions = [
+    ['كيف أختار المقاس واللون المناسب؟', 'افتحي صفحة العباية واختاري اللون والمقاس من الخيارات المتاحة قبل إضافتها إلى السلة.'],
+    ['كيف أستفيد من عروض الخصم؟', 'تُطبّق عروض القسم المفعّلة تلقائيًا على المنتجات المشمولة، ويظهر السعر بعد الخصم في صفحة المنتج والسلة.'],
+    ['كيف أتابع حالة طلبي؟', 'سجّلي الدخول إلى حسابك ثم افتحي صفحة الطلبات لمراجعة حالة الطلب وتفاصيله.'],
+    ['كيف أعرف تفاصيل الاستبدال والاسترجاع؟', 'راجعي صفحة سياسات المتجر، وإذا احتجتِ إلى توضيح إضافي تواصلي معنا عبر إحدى القنوات أعلاه.'],
+    ['هل يمكنني الاستفسار عن منتج قبل الطلب؟', 'نعم، أرسلي لنا رابط المنتج أو اسمه عبر الهاتف أو واتساب أو البريد أو حساباتنا الاجتماعية.'],
+  ]
+
+  const toggleQuestion = (index: number) => {
+    setOpenQuestions((current) =>
+      current.includes(index)
+        ? current.filter((question) => question !== index)
+        : [...current, index],
+    )
+  }
+
+  return (
+    <section className="contact-faq">
+      <div className="section-heading"><div><p className="eyebrow">نجيب عن استفساراتك</p><h2>الأسئلة الشائعة</h2></div></div>
+      <div className="faq-list">
+        {questions.map(([question, answer], index) => {
+          const isOpen = openQuestions.includes(index)
+          const answerId = `contact-faq-answer-${index}`
+          return (
+            <div className={`faq-item${isOpen ? ' open' : ''}`} key={question}>
+              <button
+                className="faq-question"
+                type="button"
+                aria-expanded={isOpen}
+                aria-controls={answerId}
+                onClick={() => toggleQuestion(index)}
+              >
+                {question}
+              </button>
+              <div className="faq-answer" id={answerId} aria-hidden={!isOpen}>
+                <div><p>{answer}</p></div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
 
 function AboutPage({ storeName, storyText }: { storeName: string; storyText?: string | null }) {
   return (
@@ -127,7 +175,7 @@ export default function StoreInformation({
       const { data, error: resultError } = await supabase
         .from('store_settings')
         .select(
-          'store_name,about_text,contact_phone,contact_email,instagram_url,return_policy,privacy_policy'
+          'store_name,about_text,contact_phone,contact_email,instagram_url,facebook_url,return_policy,privacy_policy'
         )
         .eq('id', true)
         .maybeSingle()
@@ -145,6 +193,7 @@ export default function StoreInformation({
           contact_phone: '',
           contact_email: '',
           instagram_url: '',
+          facebook_url: '',
           return_policy: '',
           privacy_policy: '',
         })
@@ -165,19 +214,14 @@ export default function StoreInformation({
       return <AboutPage storeName={DEFAULT_STORE_NAME} storyText={DEFAULT_ABOUT_TEXT} />
     }
 
-    const fallbackText =
-      page === 'contact'
-        ? 'تواصلي معنا للاستفسار عن المنتجات والطلبات.'
-        : 'تُضبط سياسات الخصوصية والاستبدال من إعدادات المتجر.'
+    if (page === 'contact') {
+      return <main className="page-main contact-page"><section className="contact-hero"><div className="contact-hero-copy"><p className="eyebrow">{DEFAULT_STORE_NAME} · نحن هنا لأجلك</p><h1>يسعدنا <em>تواصلك</em></h1><p>فريق الحلم هنا لمساعدتك في اختيار عبايتك ومتابعة طلبك. اختاري الطريقة الأقرب إليك.</p></div><div className="contact-hero-mark" aria-hidden="true"><MessageCircle /><span>بكل حب</span></div></section><div className="contact-empty admin-card"><AlertCircle size={22} /><p className="muted-copy">تُضاف روابط التواصل من إعدادات المتجر بعد ربط قاعدة البيانات.</p></div><ContactFaqs /></main>
+    }
 
     return (
       <InfoPage
-        title={
-          page === 'contact'
-            ? 'يسعدنا تواصلك'
-            : 'سياسات المتجر'
-        }
-        text={fallbackText}
+        title="سياسات المتجر"
+        text="تُضبط سياسات الخصوصية والاستبدال من إعدادات المتجر."
       />
     )
   }
@@ -193,7 +237,7 @@ export default function StoreInformation({
     )
   }
 
-  if (error) {
+  if (error && page !== 'contact') {
     return (
       <main className="page-main">
         <EmptyState
@@ -211,56 +255,83 @@ export default function StoreInformation({
   }
 
   if (page === 'contact') {
+    const whatsappNumber = settings?.contact_phone?.replace(/\D/g, '').replace(/^00/, '').replace(/^0/, '20')
     const hasContact =
       settings?.contact_phone ||
       settings?.contact_email ||
-      settings?.instagram_url
+      settings?.instagram_url ||
+      settings?.facebook_url
 
     return (
-      <main className="page-main narrow-page">
-        <div className="page-title">
-          <p className="eyebrow">{storeName}</p>
-          <h1>يسعدنا تواصلك</h1>
-          <p>
-            فريق الحلم هنا لمساعدتك في اختيار عبايتك ومتابعة طلبك.
-          </p>
-        </div>
+      <main className="page-main contact-page">
+        <section className="contact-hero">
+          <div className="contact-hero-copy">
+            <p className="eyebrow">{storeName} · نحن هنا لأجلك</p>
+            <h1>يسعدنا <em>تواصلك</em></h1>
+            <p>فريق الحلم هنا لمساعدتك في اختيار عبايتك ومتابعة طلبك. اختاري الطريقة الأقرب إليك.</p>
+          </div>
+          <div className="contact-hero-mark" aria-hidden="true"><MessageCircle /><span>بكل حب</span></div>
+        </section>
 
-        {hasContact ? (
-          <div className="contact-details">
+        {error && <div className="contact-empty admin-card"><AlertCircle size={22} /><p className="muted-copy">تعذر تحميل روابط التواصل: {error}</p></div>}
+        {!error && hasContact ? (
+          <section className="contact-methods">
+            <div className="contact-section-heading"><p className="eyebrow">قنوات التواصل</p><h2>اختاري الطريقة الأقرب إليك</h2></div>
+            <div className="contact-details">
             {settings?.contact_phone && (
-              <a href={`tel:${settings.contact_phone}`}>
-                <Phone size={18} />
-                <span>{settings.contact_phone}</span>
+              <a className="contact-card" href={`tel:${settings.contact_phone}`}>
+                <span className="contact-card-icon"><Phone size={20} /></span>
+                <span className="contact-card-copy"><b>اتصال هاتفي</b><small>{settings.contact_phone}</small></span>
+                <ArrowLeft className="contact-card-arrow" size={17} />
+              </a>
+            )}
+
+            {whatsappNumber && (
+              <a className="contact-card" href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noopener noreferrer">
+                <span className="contact-card-icon"><MessageCircle size={20} /></span>
+                <span className="contact-card-copy"><b>واتساب</b><small>راسلينا مباشرةً</small></span>
+                <ArrowLeft className="contact-card-arrow" size={17} />
               </a>
             )}
 
             {settings?.contact_email && (
-              <a href={`mailto:${settings.contact_email}`}>
-                <Mail size={18} />
-                <span>{settings.contact_email}</span>
+              <a className="contact-card" href={`mailto:${settings.contact_email}`}>
+                <span className="contact-card-icon"><Mail size={20} /></span>
+                <span className="contact-card-copy"><b>البريد الإلكتروني</b><small>{settings.contact_email}</small></span>
+                <ArrowLeft className="contact-card-arrow" size={17} />
               </a>
             )}
 
             {settings?.instagram_url && (
               <a
+                className="contact-card"
                 href={settings.instagram_url}
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <Instagram size={18} />
-                <span>حساب الحلم على إنستغرام</span>
+                <span className="contact-card-icon"><Instagram size={20} /></span>
+                <span className="contact-card-copy"><b>إنستغرام</b><small>تابعي حساب الحلم</small></span>
+                <ArrowLeft className="contact-card-arrow" size={17} />
               </a>
             )}
-          </div>
-        ) : (
-          <div className="admin-card">
+            {settings?.facebook_url && (
+              <a className="contact-card" href={settings.facebook_url} target="_blank" rel="noopener noreferrer">
+                <span className="contact-card-icon"><Facebook size={20} /></span>
+                <span className="contact-card-copy"><b>فيسبوك</b><small>زوري صفحة الحلم</small></span>
+                <ArrowLeft className="contact-card-arrow" size={17} />
+              </a>
+            )}
+            </div>
+          </section>
+        ) : !error ? (
+          <div className="contact-empty admin-card">
             <AlertCircle size={22} />
             <p className="muted-copy">
               لم تُضف بيانات التواصل بعد. يمكنك تحديثها من لوحة الإدارة.
             </p>
           </div>
-        )}
+        ) : null}
+        <ContactFaqs />
       </main>
     )
   }

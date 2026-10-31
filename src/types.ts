@@ -18,7 +18,9 @@ export type Product = {
   is_featured: boolean
   is_active: boolean
   category_id: string | null
-  category?: Pick<Category, 'name' | 'slug'> | null
+  category?: Pick<Category, 'name' | 'slug' | 'description'> & {
+    promotions?: import('./lib/promotions').Promotion[] | null
+  } | null
   images?: { id?: string; image_url: string; storage_path?: string | null; alt_text: string | null; position: number }[]
   variants?: { id: string; size: string; color: string; stock: number }[]
 }

@@ -1,15 +1,16 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Check, CreditCard, MapPin, ShieldCheck, ShoppingBag, Trash2, Truck, Upload } from 'lucide-react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { readCart, writeCart } from '../lib/cart'
 import type { Product } from '../types'
 import { categoryFallback, money } from '../components/Storefront'
 import { EmptyState, ToastMessage } from '../components/Common'
+import { categoryPromotions, promotionPercent, promotionPrice } from '../lib/promotions'
 
 export function CartPage() {
   const [lines, setLines] = useState(readCart)
-  const [items, setItems] = useState<{ variantId: string; product: Pick<Product, 'id' | 'name' | 'slug' | 'price'> & Pick<Product, 'images'>; size: string; color: string; stock: number; quantity: number }[]>([])
+  const [items, setItems] = useState<{ variantId: string; product: Pick<Product, 'id' | 'name' | 'slug' | 'price'> & Pick<Product, 'images'> & { category?: Product['category'] }; size: string; color: string; stock: number; quantity: number }[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -23,7 +24,7 @@ export function CartPage() {
       try {
         const { data, error: resultError } = await supabase
           .from('product_variants')
-          .select('id,size,color,stock,product:products(id,name,slug,price,images:product_images(image_url,alt_text,position))')
+          .select('id,size,color,stock,product:products(id,name,slug,price,category:categories(name,slug,description,promotions(id,title,description,discount_percent,image_url)),images:product_images(image_url,alt_text,position))')
           .in('id', lines.map((line) => line.variantId))
 
         if (!active) return
@@ -54,9 +55,53 @@ export function CartPage() {
     writeCart(next)
     setLines(next)
   }
-  const subtotal = items.reduce((total, item) => total + item.product.price * item.quantity, 0)
+  const subtotal = items.reduce((total, item) => total + promotionPrice(item.product.price, categoryPromotions(item.product.category)) * item.quantity, 0)
+  const discountTotal = items.reduce((total, item) => total + (item.product.price - promotionPrice(item.product.price, categoryPromotions(item.product.category))) * item.quantity, 0)
+  const regularSubtotal = subtotal + discountTotal
 
-  return <main className="page-main narrow-page"><div className="page-title"><p className="eyebrow">اختياراتك</p><h1>سلة الحلم</h1></div>{error ? <EmptyState title="تعذر تحميل السلة" message={error} /> : loading ? <div className="loading-message">جارٍ تحميل محتويات السلة…</div> : items.length === 0 ? <EmptyState title="سلتك فارغة الآن" message={isSupabaseConfigured ? lines.length ? 'تعذر العثور على تفاصيل المنتجات المحفوظة في السلة. أزيلي العناصر القديمة ثم أضيفيها من جديد.' : 'القطعة المناسبة بانتظارك. اكتشفي مجموعتنا واختاري ما يشبهك.' : 'اربط Supabase ثم أضيفي خيارات المنتجات المتاحة إلى سلتك.'} action="/products" actionText="اكتشفي العبايات" /> : <><div className="cart-list">{items.map((item) => <div className="cart-item" key={item.variantId}><img src={item.product.images?.[0]?.image_url || categoryFallback(0)} alt={item.product.name} /><div className="cart-item-info"><h3>{item.product.name}</h3><span>{item.color} · مقاس {item.size}</span><b>{money(item.product.price)}</b><div className="quantity-control"><button aria-label="تقليل الكمية" onClick={() => updateQuantity(item.variantId, item.quantity - 1)}>−</button><span>{item.quantity}</span><button aria-label="زيادة الكمية" disabled={item.quantity >= item.stock} onClick={() => updateQuantity(item.variantId, item.quantity + 1)}>+</button></div></div><button className="remove-line" onClick={() => updateQuantity(item.variantId, 0)}>حذف</button></div>)}</div><div className="cart-summary"><div><span>المجموع الفرعي</span><b>{money(subtotal)}</b></div><p>تُحسب تكلفة التوصيل والعربون عند إتمام الطلب.</p><Link className="button button-dark full-button" to="/checkout">إتمام الطلب <ArrowLeft size={16} /></Link></div></>}</main>
+  return <main className="page-main narrow-page cart-page">
+    <div className="page-title cart-page-title">
+      <p className="eyebrow">اختياراتك بكل حب</p>
+      <h1>سلة الحلم</h1>
+      {items.length > 0 && <span className="cart-item-count"><ShoppingBag size={15} /> {items.reduce((count, item) => count + item.quantity, 0)} قطع مختارة</span>}
+    </div>
+    {error ? <EmptyState title="تعذر تحميل السلة" message={error} /> : loading ? <div className="loading-message">جارٍ تحميل محتويات السلة…</div> : items.length === 0 ? <EmptyState title="سلتك فارغة الآن" message={isSupabaseConfigured ? lines.length ? 'تعذر العثور على تفاصيل المنتجات المحفوظة في السلة. أزيلي العناصر القديمة ثم أضيفيها من جديد.' : 'القطعة المناسبة بانتظارك. اكتشفي مجموعتنا واختاري ما يشبهك.' : 'اربط Supabase ثم أضيفي خيارات المنتجات المتاحة إلى سلتك.'} action="/products" actionText="اكتشفي العبايات" /> : <div className="cart-content">
+      <div className="cart-list">{items.map((item) => {
+        const promotions = categoryPromotions(item.product.category)
+        const price = promotionPrice(item.product.price, promotions)
+        const discount = promotionPercent(promotions)
+        return <article className="cart-item" key={item.variantId}>
+          <Link className="cart-item-image" to={`/products/${item.product.slug}`} aria-label={`عرض ${item.product.name}`}>
+            <img src={item.product.images?.[0]?.image_url || categoryFallback(0)} alt={item.product.name} />
+          </Link>
+          <div className="cart-item-info">
+            <Link to={`/products/${item.product.slug}`} className="cart-item-name">{item.product.name}</Link>
+            <span className="cart-item-variant"><span>{item.color}</span><i /> مقاس {item.size}</span>
+            <b className="cart-item-price">{money(price)}{discount > 0 && <del>{money(item.product.price)}</del>}</b>
+            <div className="cart-item-actions">
+              <div className="quantity-control" aria-label="تعديل الكمية">
+                <button aria-label="تقليل الكمية" onClick={() => updateQuantity(item.variantId, item.quantity - 1)}>−</button>
+                <span>{item.quantity}</span>
+                <button aria-label="زيادة الكمية" disabled={item.quantity >= item.stock} onClick={() => updateQuantity(item.variantId, item.quantity + 1)}>+</button>
+              </div>
+              <button className="remove-line" onClick={() => updateQuantity(item.variantId, 0)}><Trash2 size={14} /> إزالة</button>
+            </div>
+          </div>
+        </article>
+      })}</div>
+      <aside className="cart-summary">
+        <h2>ملخص السلة</h2>
+        <div className="cart-summary-line"><span>عدد القطع</span><b>{items.reduce((count, item) => count + item.quantity, 0)}</b></div>
+        <div className="cart-summary-line"><span>المجموع قبل الخصم</span><b>{money(regularSubtotal)}</b></div>
+        {discountTotal > 0 && <div className="cart-summary-line cart-savings"><span>وفرتِ مع عروض الحلم</span><b>− {money(discountTotal)}</b></div>}
+        <div className="cart-summary-total"><span>الإجمالي بعد الخصم</span><b>{money(subtotal)}</b></div>
+        <p>تُحسب تكلفة التوصيل والعربون في الخطوة التالية.</p>
+        <Link className="button button-dark full-button" to="/checkout">متابعة لإتمام الطلب <ArrowLeft size={16} /></Link>
+        <Link className="cart-continue-link" to="/products">متابعة التسوق</Link>
+        <div className="cart-safe-note"><ShieldCheck size={16} /><span>بياناتك وطلبك في أمان</span></div>
+      </aside>
+    </div>}
+  </main>
 }
 
 export function CheckoutPage() {
@@ -66,6 +111,7 @@ export function CheckoutPage() {
   const [receipt, setReceipt] = useState<File | null>(null)
   const [settings, setSettings] = useState<{ deposit_type: string; deposit_value: number; delivery_fee: number; transfer_details: string } | null>(null)
   const [subtotal, setSubtotal] = useState(0)
+  const [discountTotal, setDiscountTotal] = useState(0)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
@@ -78,12 +124,21 @@ export function CheckoutPage() {
       if (error) setMessage(`تعذر تحميل إعدادات الدفع: ${error.message}`)
       else setSettings(data)
     })
-    if (cart.length) supabase.from('product_variants').select('id,product:products(price)').in('id', cart.map((line) => line.variantId)).then(({ data, error }) => {
+    if (cart.length) supabase.from('product_variants').select('id,product:products(price,category:categories(name,slug,description,promotions(id,title,description,discount_percent,image_url)))').in('id', cart.map((line) => line.variantId)).then(({ data, error }) => {
       if (error) setMessage(`تعذر تحميل ملخص الطلب: ${error.message}`)
-      else setSubtotal((data ?? []).reduce((total, item) => {
+      else {
+        let regularSubtotal = 0
+        let discountedSubtotal = 0
+        for (const item of data ?? []) {
         const product = Array.isArray(item.product) ? item.product[0] : item.product
-        return total + Number(product?.price || 0) * (cart.find((line) => line.variantId === item.id)?.quantity || 0)
-      }, 0))
+          const quantity = cart.find((line) => line.variantId === item.id)?.quantity || 0
+          const price = Number(product?.price || 0)
+          regularSubtotal += price * quantity
+          discountedSubtotal += promotionPrice(price, categoryPromotions(product?.category)) * quantity
+        }
+        setSubtotal(discountedSubtotal)
+        setDiscountTotal(regularSubtotal - discountedSubtotal)
+      }
     })
   }, [])
 
@@ -117,5 +172,41 @@ export function CheckoutPage() {
     navigate(`/orders/${orderId}`)
   }
 
-  return <main className="page-main checkout-page"><div className="page-title"><p className="eyebrow">خطوة أخيرة</p><h1>إتمام الطلب</h1></div>{session === null ? <p>جارٍ التحقق من الحساب…</p> : <form className="checkout-layout" onSubmit={submit}><div className="admin-card checkout-fields"><h2>عنوان التوصيل</h2>{([['recipient_name', 'الاسم الكامل'], ['phone', 'رقم الهاتف'], ['region', 'المحافظة / المنطقة'], ['city', 'المدينة'], ['address_line', 'العنوان بالتفصيل']] as const).map(([field, label]) => <label className="checkout-label" key={field}>{label}<input required value={address[field]} onChange={(event) => setAddress({ ...address, [field]: event.target.value })} /></label>)}<label className="checkout-label">ملاحظات إضافية<textarea value={note} onChange={(event) => setNote(event.target.value)} /></label><h2>إيصال العربون</h2><p>{settings?.transfer_details || 'بيانات التحويل ستظهر هنا بعد إضافتها من إعدادات المتجر.'}</p><label className="checkout-label">ارفقي صورة أو ملف الإيصال<input required type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setReceipt(event.target.files?.[0] || null)} /></label></div><aside className="admin-card order-summary"><h2>ملخص الطلب</h2><div><span>المجموع الفرعي</span><b>{money(subtotal)}</b></div><div><span>التوصيل</span><b>{money(settings?.delivery_fee || 0)}</b></div><div><span>إجمالي الطلب</span><b>{money(total)}</b></div><div><span>العربون المطلوب</span><b>{money(deposit)}</b></div><div><span>المتبقي عند الاستلام</span><b>{money(total - deposit)}</b></div>{message && <ToastMessage message={message} />}<button disabled={busy || cart.length === 0} className="button button-dark full-button">{busy ? 'جارٍ إرسال طلبك…' : 'تأكيد الطلب'}</button></aside></form>}</main>
+  return <main className="page-main checkout-page">
+    <div className="page-title"><p className="eyebrow">خطوة أخيرة</p><h1>إتمام الطلب</h1><p>أكملي بياناتك واختاري طريقة الدفع لإرسال طلبك بكل سهولة.</p></div>
+    <div className="checkout-steps" aria-label="خطوات الطلب">
+      <span className="checkout-step-done"><i><Check size={13} /></i> السلة</span><span className="checkout-step-line" />
+      <span className="checkout-step-active"><i>٢</i> بيانات الطلب</span><span className="checkout-step-line" />
+      <span><i>٣</i> التأكيد</span>
+    </div>
+    {session === null ? <p>جارٍ التحقق من الحساب…</p> : <form className="checkout-layout" onSubmit={submit}>
+      <div className="admin-card checkout-fields">
+        <div className="checkout-section-heading"><span><MapPin size={18} /></span><div><h2>عنوان التوصيل</h2><p>أين نرسل طلبك؟</p></div></div>
+        {([['recipient_name', 'الاسم الكامل'], ['phone', 'رقم الهاتف'], ['region', 'المحافظة / المنطقة'], ['city', 'المدينة'], ['address_line', 'العنوان بالتفصيل']] as const).map(([field, label]) => <label className="checkout-label" key={field}>{label}<input required value={address[field]} onChange={(event) => setAddress({ ...address, [field]: event.target.value })} /></label>)}
+        <label className="checkout-label">ملاحظات إضافية<textarea placeholder="تفاصيل تساعدنا في توصيل طلبك…" value={note} onChange={(event) => setNote(event.target.value)} /></label>
+        <div className="checkout-section-heading checkout-payment-heading"><span><CreditCard size={18} /></span><div><h2>إيصال العربون</h2><p>أرفقي إيصال التحويل لتأكيد طلبك</p></div></div>
+        <div className="transfer-details"><CreditCard size={17} /><p>{settings?.transfer_details || 'بيانات التحويل ستظهر هنا بعد إضافتها من إعدادات المتجر.'}</p></div>
+        <label className="checkout-receipt-upload">
+          <input required type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setReceipt(event.target.files?.[0] || null)} />
+          <span className="checkout-upload-icon"><Upload size={19} /></span>
+          <span className="checkout-upload-copy"><b>{receipt?.name || 'ارفقي صورة أو ملف الإيصال'}</b><small>{receipt ? 'تم اختيار الملف بنجاح' : 'JPG أو PNG أو WebP أو PDF · بحد أقصى 5 ميجابايت'}</small></span>
+          <span className="checkout-upload-action">{receipt ? 'تغيير الملف' : 'اختيار ملف'}</span>
+        </label>
+      </div>
+      <aside className="admin-card order-summary">
+        <div className="order-summary-title"><span><ShoppingBag size={18} /></span><h2>ملخص الطلب</h2></div>
+        <div><span>المجموع قبل الخصم</span><b>{money(subtotal + discountTotal)}</b></div>
+        {discountTotal > 0 && <div className="discount-summary"><span>خصم العروض</span><b>− {money(discountTotal)}</b></div>}
+        <div><span>المجموع بعد الخصم</span><b>{money(subtotal)}</b></div>
+        <div><span>التوصيل</span><b>{money(settings?.delivery_fee || 0)}</b></div>
+        <div className="checkout-grand-total"><span>إجمالي الطلب</span><b>{money(total)}</b></div>
+        <div className="checkout-deposit"><span>العربون المطلوب</span><b>{money(deposit)}</b></div>
+        <div className="checkout-remaining"><span>المتبقي عند الاستلام</span><b>{money(total - deposit)}</b></div>
+        <div className="checkout-delivery-note"><Truck size={16} /><span>رسوم التوصيل محسوبة ضمن الإجمالي.</span></div>
+        {message && <ToastMessage message={message} />}
+        <button disabled={busy || cart.length === 0} className="button button-dark full-button">{busy ? 'جارٍ إرسال طلبك…' : 'تأكيد الطلب'} <ArrowLeft size={16} /></button>
+        <p className="checkout-secure-note"><ShieldCheck size={15} /> إتمام آمن — لا يتم إرسال طلبك قبل إرفاق الإيصال</p>
+      </aside>
+    </form>}
+  </main>
 }
