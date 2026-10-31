@@ -8,9 +8,21 @@ import { categoryFallback, money } from '../components/Storefront'
 import { EmptyState, ToastMessage } from '../components/Common'
 import { categoryPromotions, promotionPercent, promotionPrice } from '../lib/promotions'
 
+type CartProduct = Pick<Product, 'id' | 'name' | 'slug' | 'price' | 'images'> & {
+  category?: NonNullable<Product['category']> | NonNullable<Product['category']>[] | null
+}
+type CartItem = {
+  variantId: string
+  product: CartProduct
+  size: string
+  color: string
+  stock: number
+  quantity: number
+}
+
 export function CartPage() {
   const [lines, setLines] = useState(readCart)
-  const [items, setItems] = useState<{ variantId: string; product: Pick<Product, 'id' | 'name' | 'slug' | 'price'> & Pick<Product, 'images'> & { category?: Product['category'] }; size: string; color: string; stock: number; quantity: number }[]>([])
+  const [items, setItems] = useState<CartItem[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
