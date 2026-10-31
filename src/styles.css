@@ -1643,8 +1643,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
   display: flex;
   justify-content: center;
   gap: 10px;
-}
-/* =========================================================
+}/* =========================================================
    animations.css — طبقة الحركات والتفاصيل الإضافية
    استورديه بعد index.css:  import './animations.css'
    ========================================================= */
@@ -1689,12 +1688,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
 
 /* ---------- 3) الهيدر ---------- */
 .site-header { transition: height .3s ease, box-shadow .3s ease, background .3s ease; }
+/* مهم: لا نضع backdrop-filter على الهيدر نفسه، لأنه يحبس القائمة الثابتة (fixed) داخله على الموبايل */
+.site-header::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  opacity: 0; transition: opacity .3s ease;
+}
 .site-header.scrolled {
   height: 68px;
   box-shadow: 0 8px 28px rgb(36 35 31 / 8%);
   background: color-mix(in srgb, var(--paper) 88%, transparent);
-  backdrop-filter: blur(12px);
 }
+.site-header.scrolled::before { opacity: 1; }
 .main-nav > a:not(.mobile-nav-arrow) { position: relative; padding-block: 6px; }
 @media (min-width: 641px) {
   .main-nav > a::after {
