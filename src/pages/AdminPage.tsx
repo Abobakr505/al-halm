@@ -10,7 +10,7 @@ import {
   type OrderStatus,
   type Product,
 } from "../types";
-
+import { GOVERNORATES } from "../lib/governorates";
 const ORDER_STATUSES = Object.entries(orderStatusLabels) as [
   OrderStatus,
   string,
@@ -2319,7 +2319,130 @@ const [settings, setSettings] = useState({
     </section>
   );
 }
+function DeliveryZones() {
+  const [rows, setRows] = useState<Record<string, { fee: string; active: boolean }>>({});
+  const [bulk, setBulk] = useState("");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (!supabase) return;
+    supabase
+      .from("delivery_zones")
+      .select("governorate,fee,is_active")
+      .then(({ data, error }) => {
+        if (error) {
+          setMessage(`تعذر تحميل أسعار التوصيل: ${error.message}`);
+          return;
+        }
+        const next: Record<string, { fee: string; active: boolean }> = {};
+        GOVERNORATES.forEach((g) => (next[g] = { fee: "0", active: true }));
+        (data ?? []).forEach((r) => {
+          next[r.governorate] = { fee: String(r.fee), active: r.is_active };
+        });
+        setRows(next);
+      });
+  }, []);
+
+  const applyToAll = () => {
+    if (bulk === "" || Number(bulk) < 0 || !Number.isFinite(Number(bulk))) {
+      setMessage("أدخلي سعرًا صحيحًا (0 أو أكثر).");
+      return;
+    }
+    setRows((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([g, r]) => [g, { ...r, fee: bulk }]),
+      ),
+    );
+  };
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!supabase) return;
+    const invalid = GOVERNORATES.find((g) => {
+      const v = rows[g]?.fee;
+      return v === "" || !Number.isFinite(Number(v)) || Number(v) < 0;
+    });
+    if (invalid) {
+      setMessage(`أدخلي سعر توصيل صحيح (0 أو أكثر) لمحافظة ${invalid}.`);
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase.from("delivery_zones").upsert(
+      GOVERNORATES.map((g) => ({
+        governorate: g,
+        fee: Number(rows[g].fee),
+        is_active: rows[g].active,
+      })),
+      { onConflict: "governorate" },
+    );
+    setBusy(false);
+    setMessage(
+      error
+        ? `تعذر حفظ أسعار التوصيل: ${error.message}`
+        : "تم حفظ أسعار التوصيل.",
+    );
+  };
+
+  return (
+    <section className="admin-card">
+      <h2>أسعار التوصيل حسب المحافظة</h2>
+      <p className="muted-copy">
+        حددي سعرًا مختلفًا لكل محافظة. اكتبي 0 للتوصيل المجاني، وأوقفي المحافظة
+        إذا كنتِ لا توصلين إليها.
+      </p>
+      <div className="zones-bulk">
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          placeholder="سعر موحد"
+          value={bulk}
+          onChange={(event) => setBulk(event.target.value)}
+        />
+        <button type="button" className="button button-outline" onClick={applyToAll}>
+          تطبيق على كل المحافظات
+        </button>
+      </div>
+      <form onSubmit={save}>
+        <div className="zones-grid">
+          {GOVERNORATES.map((g) => (
+            <div className={`zone-row${rows[g]?.active === false ? " is-off" : ""}`} key={g}>
+              <b>{g}</b>
+              <div className="zone-fee">
+                <input
+                  aria-label={`سعر التوصيل ${g}`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={rows[g]?.fee ?? ""}
+                  onChange={(event) =>
+                    setRows({ ...rows, [g]: { ...rows[g], fee: event.target.value } })
+                  }
+                />
+                <span>ج.م</span>
+              </div>
+              <label className="zone-active">
+                <input
+                  type="checkbox"
+                  checked={rows[g]?.active ?? true}
+                  onChange={(event) =>
+                    setRows({ ...rows, [g]: { ...rows[g], active: event.target.checked } })
+                  }
+                />
+                متاح
+              </label>
+            </div>
+          ))}
+        </div>
+        <button className="button button-dark" disabled={busy}>
+          {busy ? "جارٍ الحفظ…" : "حفظ أسعار التوصيل"}
+        </button>
+      </form>
+      {message && <ToastMessage message={message} />}
+    </section>
+  );
+}
 export default function AdminPage() {
   const location = useLocation();
   const path = location.pathname.replace(/\/+$/, "");
@@ -2344,9 +2467,12 @@ export default function AdminPage() {
         <OrderManagement />
       ) : active === "customers" ? (
         <CustomerManagement />
-      ) : active === "settings" ? (
-        <StoreSettings />
-      ) : (
+     ) : active === "settings" ? (
+  <>
+    <StoreSettings />
+    <DeliveryZones />
+  </>
+) : (
         <Dashboard />
       )}
     </AdminLayout>

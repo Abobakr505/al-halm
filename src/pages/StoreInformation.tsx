@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AlertCircle, ArrowLeft, Facebook, Heart, Instagram, Mail, MessageCircle, Phone, Sparkles } from 'lucide-react'
-import { EmptyState, InfoPage } from '../components/Common'
+import { EmptyState, InfoPage , TikTokIcon } from '../components/Common'
 import { supabase } from '../lib/supabase'
 
 type StoreSettings = {
@@ -12,6 +12,7 @@ type StoreSettings = {
   contact_email: string | null
   instagram_url: string | null
   facebook_url: string | null
+  tiktok_url: string | null
   return_policy: string | null
   privacy_policy: string | null
 }
@@ -175,7 +176,7 @@ export default function StoreInformation({
       const { data, error: resultError } = await supabase
         .from('store_settings')
         .select(
-          'store_name,about_text,contact_phone,contact_email,instagram_url,facebook_url,return_policy,privacy_policy'
+          'store_name,about_text,contact_phone,contact_email,instagram_url,facebook_url,tiktok_url,return_policy,privacy_policy'
         )
         .eq('id', true)
         .maybeSingle()
@@ -194,6 +195,7 @@ export default function StoreInformation({
           contact_email: '',
           instagram_url: '',
           facebook_url: '',
+          tiktok_url: '',
           return_policy: '',
           privacy_policy: '',
         })
@@ -256,11 +258,12 @@ export default function StoreInformation({
 
   if (page === 'contact') {
     const whatsappNumber = settings?.contact_phone?.replace(/\D/g, '').replace(/^00/, '').replace(/^0/, '20')
-    const hasContact =
-      settings?.contact_phone ||
-      settings?.contact_email ||
-      settings?.instagram_url ||
-      settings?.facebook_url
+const hasContact =
+  settings?.contact_phone ||
+  settings?.contact_email ||
+  settings?.instagram_url ||
+  settings?.facebook_url ||
+  settings?.tiktok_url
 
     return (
       <main className="page-main contact-page">
@@ -321,6 +324,13 @@ export default function StoreInformation({
                 <ArrowLeft className="contact-card-arrow" size={17} />
               </a>
             )}
+            {settings?.tiktok_url && (
+  <a className="contact-card" href={settings.tiktok_url} target="_blank" rel="noopener noreferrer">
+    <span className="contact-card-icon"><TikTokIcon size={20} /></span>
+    <span className="contact-card-copy"><b>تيك توك</b><small>شاهدي فيديوهات الحلم</small></span>
+    <ArrowLeft className="contact-card-arrow" size={17} />
+  </a>
+)}
             </div>
           </section>
         ) : !error ? (

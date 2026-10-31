@@ -7,7 +7,8 @@ import { orderStatusLabels, type OrderStatus } from '../types'
 import { EmptyState, ToastMessage } from '../components/Common'
 import { money, categoryFallback } from '../components/Storefront'
 import { promotionPercent, promotionPrice } from '../lib/promotions'
-
+import { GOVERNORATES } from '../lib/governorates'
+import { validateSignup } from '../lib/validation'
 type Address = {
   id: string
   recipient_name: string
@@ -128,7 +129,7 @@ export function AccountPage() {
   const [addresses, setAddresses] = useState<Address[]>([])
   const [accountOrders, setAccountOrders] = useState<CustomerOrder[]>([])
   const [accountLoading, setAccountLoading] = useState(true)
-
+const [zones, setZones] = useState<Record<string, number>>({})
   const [address, setAddress] = useState({
     recipient_name: '',
     phone: '',
@@ -160,7 +161,16 @@ export function AccountPage() {
       window.removeEventListener('keydown', closeOnEscape)
     }
   }, [logoutConfirm, signingOut])
-
+useEffect(() => {
+  if (!supabase) return
+  supabase
+    .from('delivery_zones')
+    .select('governorate,fee')
+    .eq('is_active', true)
+    .then(({ data }) =>
+      setZones(Object.fromEntries((data ?? []).map((z) => [z.governorate, Number(z.fee)])))
+    )
+}, [])
   const loadAccount = async () => {
     if (!supabase) return
 
@@ -255,7 +265,29 @@ export function AccountPage() {
 
   const addAddress = async (event: FormEvent) => {
     event.preventDefault()
-
+const digits = address.phone
+  .replace(/[\s-]/g, '')
+  .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+if (address.recipient_name.trim().split(/\s+/).length < 2) {
+  setMessage('اكتبي الاسم الأول والأخير على الأقل.')
+  return
+}
+if (!/^01[0125]\d{8}$/.test(digits)) {
+  setMessage('أدخلي رقم موبايل مصري صحيح (11 رقم يبدأ بـ 01).')
+  return
+}
+if (!GOVERNORATES.includes(address.region)) {
+  setMessage('اختاري المحافظة من القائمة.')
+  return
+}
+if (address.city.trim().length < 2) {
+  setMessage('أدخلي اسم المدينة.')
+  return
+}
+if (address.address_line.trim().length < 10) {
+  setMessage('اكتبي العنوان بالتفصيل (10 أحرف على الأقل).')
+  return
+}
     if (!supabase || busy) return
     if (address.map_url.trim()) {
       try {
@@ -451,33 +483,47 @@ export function AccountPage() {
             <div className="account-card-heading"><span className="account-card-icon"><MapPin size={18} /></span><div><h2>{editingAddress ? 'تعديل عنوان التوصيل' : 'إضافة عنوان توصيل'}</h2><p>احفظي عنوانك لتسهيل إتمام الطلبات القادمة.</p></div></div>
 
             <form className="account-form address-form" onSubmit={addAddress}>
-              {(
-                [
-                  ['recipient_name', 'الاسم المستلم'],
-                  ['phone', 'رقم الهاتف'],
-                  ['region', 'المنطقة'],
-                  ['city', 'المدينة'],
-                  ['address_line', 'العنوان بالتفصيل'],
-                  ['map_url', 'رابط موقع Google Maps (اختياري)'],
-                  ['notes', 'ملاحظات']
-                ] as const
-              ).map(([field, label]) => (
-                <label key={field}>
-                  {label}
-                  <input
-                    required={field !== 'notes' && field !== 'map_url'}
-                    type={field === 'map_url' ? 'url' : 'text'}
-                    placeholder={field === 'map_url' ? 'https://maps.google.com/…' : undefined}
-                    value={address[field]}
-                    onChange={(event) =>
-                      setAddress({
-                        ...address,
-                        [field]: event.target.value
-                      })
-                    }
-                  />
-                </label>
-              ))}
+             {(
+  [
+    ['recipient_name', 'الاسم المستلم'],
+    ['phone', 'رقم الهاتف'],
+    ['region', 'المحافظة'],
+    ['city', 'المدينة'],
+    ['address_line', 'العنوان بالتفصيل'],
+    ['map_url', 'رابط موقع Google Maps (اختياري)'],
+    ['notes', 'ملاحظات']
+  ] as const
+).map(([field, label]) =>
+  field === 'region' ? (
+    <label key={field}>
+      {label}
+      <select
+        required
+        className="governorate-select"
+        value={address.region}
+        onChange={(event) => setAddress({ ...address, region: event.target.value })}
+      >
+        <option value="">اختاري المحافظة</option>
+        {GOVERNORATES.filter((g) => !Object.keys(zones).length || g in zones).map((g) => (
+          <option key={g} value={g}>
+            {g}{zones[g] !== undefined ? ` — ${money(zones[g])}` : ''}
+          </option>
+        ))}
+      </select>
+    </label>
+  ) : (
+    <label key={field}>
+      {label}
+      <input
+        required={field !== 'notes' && field !== 'map_url'}
+        type={field === 'map_url' ? 'url' : 'text'}
+        placeholder={field === 'map_url' ? 'https://maps.google.com/…' : undefined}
+        value={address[field]}
+        onChange={(event) => setAddress({ ...address, [field]: event.target.value })}
+      />
+    </label>
+  )
+)}
 
               <button className="button button-dark" disabled={busy}>
                 {busy
@@ -805,7 +851,8 @@ export function AuthPage() {
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [signupCooldown, setSignupCooldown] = useState(0)
-
+const [confirm, setConfirm] = useState('')
+const [errors, setErrors] = useState<Record<string, string>>({})
   // يمنع إرسال أكثر من طلب في نفس الوقت
   const submitLock = useRef(false)
 
@@ -916,18 +963,16 @@ export function AuthPage() {
       return
     }
 
-    if (currentMode === 'signup') {
-      if (!name.trim() || !phone.trim()) {
-        setMessage('أدخلي الاسم الكامل ورقم الهاتف.')
-        return
-      }
-
-      if (password.length < 8) {
-        setMessage('يجب أن تتكون كلمة المرور من 8 أحرف على الأقل.')
-        return
-      }
-    }
-
+let cleanPhone = phone.trim()
+if (currentMode === 'signup') {
+  const check = validateSignup({ name, phone, email: cleanEmail, password, confirm })
+  setErrors(check.errors)
+  if (Object.keys(check.errors).length) {
+    setMessage('راجعي الحقول المميزة وصحّحيها.')
+    return
+  }
+  cleanPhone = check.phone
+}
     // قفل فوري لمنع النقر المتكرر
     submitLock.current = true
     setBusy(true)
@@ -949,9 +994,9 @@ export function AuthPage() {
           password,
           options: {
             data: {
-              full_name: name.trim(),
-              phone: phone.trim()
-            }
+  full_name: name.trim(),
+  phone: cleanPhone
+}
           }
         })
       }
@@ -1073,6 +1118,8 @@ export function AuthPage() {
 
     setMode(nextMode)
     setMessage('')
+        setErrors({})
+setConfirm('')
   }
 
   return (
@@ -1094,16 +1141,17 @@ export function AuthPage() {
           {mode === 'signup' && (
             <>
               <label>
-                الاسم الكامل
-
-                <input
-                  required
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  autoComplete="name"
-                  disabled={busy}
-                />
-              </label>
+  الاسم الكامل
+  <input
+    required
+    value={name}
+    aria-invalid={Boolean(errors.name)}
+    onChange={(event) => { setName(event.target.value); setErrors({ ...errors, name: '' }) }}
+    autoComplete="name"
+    disabled={busy}
+  />
+  {errors.name && <small className="field-error">{errors.name}</small>}
+</label>
 
               <label>
                 رقم الهاتف
@@ -1116,6 +1164,7 @@ export function AuthPage() {
                   autoComplete="tel"
                   disabled={busy}
                 />
+                {errors.phone && <small className="field-error">{errors.phone}</small>}
               </label>
             </>
           )}
@@ -1150,7 +1199,21 @@ export function AuthPage() {
               disabled={busy}
             />
           </label>
-
+{mode === 'signup' && (
+  <label>
+    تأكيد كلمة المرور
+    <input
+      required
+      type="password"
+      value={confirm}
+      aria-invalid={Boolean(errors.confirm)}
+      onChange={(event) => { setConfirm(event.target.value); setErrors({ ...errors, confirm: '' }) }}
+      autoComplete="new-password"
+      disabled={busy}
+    />
+    {errors.confirm && <small className="field-error">{errors.confirm}</small>}
+  </label>
+)}
           {message && <ToastMessage message={message} />}
 
           {signupCooldown > 0 && mode === 'signup' && (

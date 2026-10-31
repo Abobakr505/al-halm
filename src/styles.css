@@ -1965,3 +1965,76 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
   border-color: #d4a85a;
   box-shadow: 0 0 0 3px rgba(212, 168, 90, 0.2);
 }
+
+
+.field-error { color: #b3261e; font-size: 0.8rem; margin-top: 4px; }
+.checkout-label [aria-invalid="true"] { border-color: #b3261e; }
+.governorate-select,
+.checkout-label select,
+.account-form select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: #fdf6ee;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23b8893f' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 14px center; /* الصفحة RTL فالسهم على الشمال */
+  color: #2b2118;
+  border: 1px solid #e6d5c0;
+  border-radius: 12px;
+  padding: 12px 14px 12px 40px;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.governorate-select:focus,
+.checkout-label select:focus,
+.account-form select:focus {
+  outline: none;
+  border-color: #b8893f;
+  box-shadow: 0 0 0 3px rgba(184, 137, 63, 0.18);
+}
+
+.governorate-select:invalid { color: #8a7a68; }
+
+.dark .governorate-select,
+.dark .checkout-label select,
+.dark .account-form select {
+  background-color: #231c16;
+  color: #f3e9dc;
+  border-color: #4a3b2c;
+}
+
+.dark .governorate-select option,
+.dark .checkout-label select option,
+.dark .account-form select option {
+  background: #231c16;
+  color: #f3e9dc;
+}
+
+.zones-bulk { display: flex; gap: 10px; margin: 14px 0; flex-wrap: wrap; }
+.zones-bulk input { max-width: 160px; }
+.zones-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.zone-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #e6d5c0;
+  border-radius: 12px;
+  background: #fdf6ee;
+}
+.zone-row.is-off { opacity: 0.55; }
+.zone-fee { display: flex; align-items: center; gap: 6px; }
+.zone-fee input { width: 90px; padding: 8px 10px; }
+.zone-active { grid-column: 1 / -1; display: flex; gap: 6px; font-size: 0.85rem; }
+.dark .zone-row { background: #231c16; border-color: #4a3b2c; }
+.field-error { color: #b3261e; font-size: 0.8rem; margin-top: 4px; display: block; }
+.auth-panel [aria-invalid="true"] { border-color: #b3261e; }
