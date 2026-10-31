@@ -237,8 +237,8 @@ export function HomePage() {
         <div>
           <ShoppingBag />
           <span>
-            <b>عربون مرن</b>
-            <small>والباقي عند الاستلام</small>
+            <b>رسوم توصيل واضحة</b>
+            <small>قيمة المنتجات عند الاستلام</small>
           </span>
         </div>
         <div>
@@ -1296,7 +1296,7 @@ export function ProductDetailsPage() {
           أضيفي إلى السلة <ShoppingBag size={17} />
         </button>
         <div className="delivery-note">
-          <Truck size={18} /> عربون عند الطلب، والباقي عند الاستلام.
+          <Truck size={18} /> تُدفع رسوم التوصيل فقط عند الطلب، وقيمة المنتجات عند الاستلام.
         </div>
       </div>
       {zoomOpen && (
@@ -1447,7 +1447,6 @@ export function CategoriesPage() {
               <span className="category-card-content">
                 <small>اكتشفي مجموعتنا</small>
                 <b>{category.name}</b>
-                <span>{category.description?.trim() || "تصاميم مختارة بعناية لترافقك بأناقة في كل يوم."}</span>
                 <i>تصفحي القسم <ArrowLeft size={15} /></i>
               </span>
               <span className="category-card-index">{String(index + 1).padStart(2, "0")}</span>

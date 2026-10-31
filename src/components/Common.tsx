@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertCircle, ArrowLeft, CheckCircle2, Facebook, Heart, Home, Instagram, Menu, Moon, Search, ShoppingBag, Sun, UserRound, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, BookOpen, CheckCircle2, Facebook, Heart, Home, Instagram, Layers2, Menu, MessageCircle, Moon, Search, ShoppingBag, Sun, UserRound, X } from 'lucide-react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { readCart, subscribeToCart } from '../lib/cart'
 
@@ -84,11 +84,16 @@ export function SiteHeader() {
 
   useEffect(() => {
     if (!menuOpen) return
+    const previousOverflow = document.body.style.overflow
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setMenuOpen(false)
     }
+    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
   }, [menuOpen])
 
   const closeMenu = () => setMenuOpen(false)
@@ -98,9 +103,16 @@ export function SiteHeader() {
     <header className="site-header">
       <button className="icon-button mobile-menu" aria-label={menuOpen ? 'إغلاق القائمة' : 'فتح القائمة'} aria-expanded={menuOpen} aria-controls="primary-navigation" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X /> : <Menu />}</button>
       <Link className="brand" to="/" aria-label="متجر الحلم الرئيسية" onClick={closeMenu}><span className="Zain brand-mark"><img className="brand-icon rounded-full" src="/logo.webp"  alt="" /></span><span className="Zain brand-name">الحلم<small>عبايات بتفاصيل تليق بك</small></span></Link>
-      <nav id="primary-navigation" className={menuOpen ? 'main-nav open' : 'main-nav'}>
-        <Link to="/" onClick={closeMenu}>الرئيسية</Link><Link to="/products" onClick={closeMenu}>العبايات</Link><Link to="/categories" onClick={closeMenu}>الأقسام</Link><Link to="/about" onClick={closeMenu}>قصتنا</Link><Link to="/contact" onClick={closeMenu}>تواصلي معنا</Link>
+      <nav id="primary-navigation" className={menuOpen ? 'main-nav open' : 'main-nav'} aria-label="القائمة الرئيسية">
+        <div className="mobile-nav-heading"><div><span>تصفحي الحلم</span><small>اختاري وجهتكِ التالية</small></div><button type="button" aria-label="إغلاق القائمة" onClick={closeMenu}><X size={18} /></button></div>
+        <Link to="/" onClick={closeMenu}><span className="mobile-nav-icon"><Home size={18} /></span><span className="mobile-nav-copy"><b>الرئيسية</b><small>بداية حكايتكِ مع الحلم</small></span><ArrowLeft className="mobile-nav-arrow" size={16} /></Link>
+        <Link to="/products" onClick={closeMenu}><span className="mobile-nav-icon"><ShoppingBag size={18} /></span><span className="mobile-nav-copy"><b>العبايات</b><small>اكتشفي مجموعتنا</small></span><ArrowLeft className="mobile-nav-arrow" size={16} /></Link>
+        <Link to="/categories" onClick={closeMenu}><span className="mobile-nav-icon"><Layers2 size={18} /></span><span className="mobile-nav-copy"><b>الأقسام</b><small>تسوقي حسب اختياركِ</small></span><ArrowLeft className="mobile-nav-arrow" size={16} /></Link>
+        <Link to="/about" onClick={closeMenu}><span className="mobile-nav-icon"><BookOpen size={18} /></span><span className="mobile-nav-copy"><b>قصتنا</b><small>تعرفي على حكاية الحلم</small></span><ArrowLeft className="mobile-nav-arrow" size={16} /></Link>
+        <Link to="/contact" onClick={closeMenu}><span className="mobile-nav-icon"><MessageCircle size={18} /></span><span className="mobile-nav-copy"><b>تواصلي معنا</b><small>نحن هنا لمساعدتكِ</small></span><ArrowLeft className="mobile-nav-arrow" size={16} /></Link>
+        <div className="mobile-nav-footer"><Heart size={14} /> تفاصيل صغيرة، أناقة تدوم</div>
       </nav>
+      {menuOpen && <button className="mobile-nav-backdrop" type="button" aria-label="إغلاق القائمة" onClick={closeMenu} />}
       <div className="header-actions">
         <Link className="icon-button favorite-link" to="/favorites" aria-label="المفضلة"><Heart /></Link>
         <Link className="icon-button account-link" to="/account" aria-label="حسابي"><UserRound /></Link>

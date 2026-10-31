@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation } from "react-router-dom";
-import { Images, Percent, Plus, Trash2, Upload, X } from "lucide-react";
+import { ExternalLink, Images, Percent, Plus, Trash2, Upload, X } from "lucide-react";
 import { EmptyState, ToastMessage } from "../components/Common";
 import { money } from "../components/Storefront";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
@@ -415,7 +415,7 @@ function Dashboard() {
         { label: "مبيعات آخر 7 أيام", value: money(salesThisWeek), note: "من الطلبات المسلّمة" },
         { label: "طلبات هذا الشهر", value: String(ordersThisMonth.length), note: "منذ بداية الشهر" },
         { label: "إجمالي الطلبات", value: String(allOrders.count ?? 0), note: "كل الطلبات المسجلة" },
-        { label: "بانتظار مراجعة العربون", value: String(reviewCount), note: "تحتاج مراجعة الإيصال" },
+        { label: "بانتظار مراجعة رسوم التوصيل", value: String(reviewCount), note: "تحتاج مراجعة الإيصال" },
         { label: "طلبات جديدة", value: String(waitingCount), note: "تحتاج بدء المعالجة" },
         { label: "العملاء", value: String(customers.count ?? 0), note: "حسابات مسجلة" },
         { label: "المنتجات المنشورة", value: String(products.count ?? 0), note: "منتجات ظاهرة بالمتجر" },
@@ -1445,7 +1445,7 @@ function OrderManagement() {
                 <th>العميل</th>
                 <th>التاريخ</th>
                 <th>الإجمالي</th>
-                <th>العربون</th>
+                <th>المدفوع مقدمًا</th>
                 <th>الدفع</th>
                 <th>الحالة</th>
                 <th />
@@ -1606,7 +1606,7 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
     if (!order) return;
     const receipt = order.payment_receipts?.[0];
     if (accepted && !receipt) {
-      setMessage("لا يمكن تأكيد العربون قبل إرفاق الإيصال.");
+      setMessage("لا يمكن تأكيد رسوم التوصيل قبل إرفاق الإيصال.");
       return;
     }
     if (receipt && supabase) {
@@ -1631,7 +1631,7 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
         status: accepted ? "deposit_confirmed" : "awaiting_deposit_review",
       },
       accepted
-        ? "تم قبول العربون."
+        ? "تم تأكيد دفع رسوم التوصيل."
         : "تم رفض الإيصال وإشعار العميل بإعادة رفعه.",
     );
   };
@@ -1666,6 +1666,7 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
           <br />
           {order.address_snapshot.address_line}
         </p>
+        {order.address_snapshot.map_url && <a className="address-map-link" href={order.address_snapshot.map_url} target="_blank" rel="noopener noreferrer">فتح الموقع على الخريطة <ExternalLink size={13} /></a>}
         {order.customer_note && <p>ملاحظة العميل: {order.customer_note}</p>}
       </section>
       <section className="admin-card admin-order-items">
@@ -1707,7 +1708,7 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
             <b>{money(order.total)}</b>
           </div>
           <div>
-            <span>العربون</span>
+            <span>المدفوع مقدمًا</span>
             <b>{money(order.deposit_amount)}</b>
           </div>
           <div>
@@ -1716,12 +1717,20 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
           </div>
           <div>
             <span>حالة الدفع</span>
-            <b>{order.payment_status}</b>
+            <b>
+              {order.payment_status === "deposit_confirmed"
+                ? "تم تأكيد رسوم التوصيل"
+                : order.payment_status === "rejected"
+                  ? "إيصال رسوم التوصيل مرفوض"
+                  : order.payment_status === "paid"
+                    ? "تم السداد"
+                    : "بانتظار إيصال رسوم التوصيل"}
+            </b>
           </div>
         </div>
       </section>
       <section className="admin-card admin-receipt-review">
-        <h2>مراجعة العربون</h2>
+        <h2>مراجعة رسوم التوصيل</h2>
         {receiptUrl ? (
           <a href={receiptUrl} target="_blank" rel="noreferrer">
             فتح الإيصال المرفق
@@ -2081,7 +2090,16 @@ function PromotionManagement() {
           <label>نسبة الخصم (%)<span className="promotion-percent-input"><input required type="number" min="1" max="100" step="0.01" value={form.discount_percent} onChange={(event) => setForm({ ...form, discount_percent: event.target.value })} /><Percent size={15} /></span></label>
           <label>بداية العرض<input required type="datetime-local" value={form.starts_at} onChange={(event) => setForm({ ...form, starts_at: event.target.value })} /></label>
           <label>نهاية العرض <small>(اختياري)</small><input type="datetime-local" value={form.ends_at} onChange={(event) => setForm({ ...form, ends_at: event.target.value })} /></label>
-          <label className="promotion-image-field">صورة العرض<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImage(event.target.files?.[0] || null)} /><small>{image?.name || "JPG أو PNG أو WebP · بحد أقصى 20 ميجابايت"}</small></label>
+          <div className="promotion-image-field">
+            <span>صورة العرض</span>
+            <label className="admin-image-upload">
+              <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => setImage(event.target.files?.[0] || null)} />
+              {!image && editing && promotions.find((promotion) => promotion.id === editing)?.image_url && <img className="admin-image-current" src={promotions.find((promotion) => promotion.id === editing)?.image_url || undefined} alt="صورة العرض الحالية" />}
+              <span className="admin-image-upload-icon"><Upload size={18} /></span>
+              <span className="admin-image-upload-copy"><b>{image?.name || (editing ? "استبدال صورة العرض (اختياري)" : "أضيفي صورة جذابة للعرض")}</b><small>{image ? "تم اختيار الصورة" : editing && promotions.find((promotion) => promotion.id === editing)?.image_url ? "الصورة الحالية محفوظة ما لم تختاري صورة بديلة" : "JPG أو PNG أو WebP · بحد أقصى 20 ميجابايت"}</small></span>
+              <span className="admin-image-upload-action">{image ? "تغيير الصورة" : "اختيار صورة"}</span>
+            </label>
+          </div>
           <label className="wide-field">وصف العرض<textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
           <label className="promotion-active-field"><input type="checkbox" checked={form.is_active} onChange={(event) => setForm({ ...form, is_active: event.target.checked })} /> تفعيل العرض في موعده</label>
           <div className="promotion-actions wide-field">
@@ -2115,8 +2133,6 @@ function StoreSettings() {
   const [settings, setSettings] = useState({
     store_name: "متجر الحلم",
     about_text: "",
-    deposit_type: "percentage",
-    deposit_value: "20",
     delivery_fee: "0",
     transfer_details: "",
     contact_phone: "",
@@ -2133,7 +2149,7 @@ function StoreSettings() {
     supabase
       .from("store_settings")
       .select(
-        "store_name,about_text,deposit_type,deposit_value,delivery_fee,transfer_details,contact_phone,contact_email,instagram_url,facebook_url,return_policy,privacy_policy",
+        "store_name,about_text,delivery_fee,transfer_details,contact_phone,contact_email,instagram_url,facebook_url,return_policy,privacy_policy",
       )
       .eq("id", true)
       .single()
@@ -2143,8 +2159,6 @@ function StoreSettings() {
           setSettings({
             store_name: data.store_name,
             about_text: data.about_text,
-            deposit_type: data.deposit_type,
-            deposit_value: String(data.deposit_value),
             delivery_fee: String(data.delivery_fee),
             transfer_details: data.transfer_details,
             contact_phone: data.contact_phone,
@@ -2165,8 +2179,6 @@ function StoreSettings() {
       .update({
         store_name: settings.store_name,
         about_text: settings.about_text,
-        deposit_type: settings.deposit_type,
-        deposit_value: Number(settings.deposit_value),
         delivery_fee: Number(settings.delivery_fee),
         transfer_details: settings.transfer_details,
         contact_phone: settings.contact_phone,
@@ -2237,33 +2249,6 @@ function StoreSettings() {
           />
         </label>
         <label>
-          نوع العربون
-          <select
-            value={settings.deposit_type}
-            onChange={(event) =>
-              setSettings({ ...settings, deposit_type: event.target.value })
-            }
-          >
-            <option value="percentage">نسبة مئوية</option>
-            <option value="fixed">مبلغ ثابت</option>
-          </select>
-        </label>
-        <label>
-          {settings.deposit_type === "percentage"
-            ? "نسبة العربون %"
-            : "مبلغ العربون"}
-          <input
-            required
-            type="number"
-            min="0"
-            step="0.01"
-            value={settings.deposit_value}
-            onChange={(event) =>
-              setSettings({ ...settings, deposit_value: event.target.value })
-            }
-          />
-        </label>
-        <label>
           تكلفة التوصيل
           <input
             required
@@ -2277,7 +2262,7 @@ function StoreSettings() {
           />
         </label>
         <label className="wide-field">
-          بيانات تحويل العربون
+          بيانات تحويل رسوم التوصيل
           <textarea
             value={settings.transfer_details}
             onChange={(event) =>

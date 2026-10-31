@@ -107,7 +107,7 @@ export function CartPage() {
         <div className="cart-summary-line"><span>المجموع قبل الخصم</span><b>{money(regularSubtotal)}</b></div>
         {discountTotal > 0 && <div className="cart-summary-line cart-savings"><span>وفرتِ مع عروض الحلم</span><b>− {money(discountTotal)}</b></div>}
         <div className="cart-summary-total"><span>الإجمالي بعد الخصم</span><b>{money(subtotal)}</b></div>
-        <p>تُحسب تكلفة التوصيل والعربون في الخطوة التالية.</p>
+        <p>تُحسب تكلفة التوصيل في الخطوة التالية، وتُدفع قيمة المنتجات عند الاستلام.</p>
         <Link className="button button-dark full-button" to="/checkout">متابعة لإتمام الطلب <ArrowLeft size={16} /></Link>
         <Link className="cart-continue-link" to="/products">متابعة التسوق</Link>
         <div className="cart-safe-note"><ShieldCheck size={16} /><span>بياناتك وطلبك في أمان</span></div>
@@ -118,10 +118,10 @@ export function CartPage() {
 
 export function CheckoutPage() {
   const [session, setSession] = useState<boolean | null>(null)
-  const [address, setAddress] = useState({ recipient_name: '', phone: '', region: '', city: '', address_line: '' })
+  const [address, setAddress] = useState({ recipient_name: '', phone: '', region: '', city: '', address_line: '', map_url: '' })
   const [note, setNote] = useState('')
   const [receipt, setReceipt] = useState<File | null>(null)
-  const [settings, setSettings] = useState<{ deposit_type: string; deposit_value: number; delivery_fee: number; transfer_details: string } | null>(null)
+  const [settings, setSettings] = useState<{ delivery_fee: number; transfer_details: string } | null>(null)
   const [subtotal, setSubtotal] = useState(0)
   const [discountTotal, setDiscountTotal] = useState(0)
   const [message, setMessage] = useState('')
@@ -132,7 +132,7 @@ export function CheckoutPage() {
   useEffect(() => {
     if (!supabase) { setSession(false); return }
     supabase.auth.getSession().then(({ data, error }) => { if (error) setMessage(error.message); setSession(Boolean(data.session)) })
-    supabase.from('store_settings').select('deposit_type,deposit_value,delivery_fee,transfer_details').eq('id', true).single().then(({ data, error }) => {
+    supabase.from('store_settings').select('delivery_fee,transfer_details').eq('id', true).single().then(({ data, error }) => {
       if (error) setMessage(`تعذر تحميل إعدادات الدفع: ${error.message}`)
       else setSettings(data)
     })
@@ -157,14 +157,14 @@ export function CheckoutPage() {
   if (!isSupabaseConfigured) return <EmptyState title="إتمام الطلب غير متاح" message="أضيفي إعدادات Supabase لإتمام الطلبات بأمان." />
   if (session === false) return <Navigate to="/login" state={{ from: '/checkout' }} replace />
   const total = subtotal + (settings?.delivery_fee || 0)
-  const deposit = settings ? settings.deposit_type === 'percentage' ? Math.round(total * Math.min(settings.deposit_value, 100)) / 100 : Math.min(settings.deposit_value, total) : 0
+  const deliveryFee = settings?.delivery_fee || 0
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     if (!supabase || cart.length === 0) { setMessage('سلتك فارغة. أضيفي عباية قبل إتمام الطلب.'); return }
-    if (!receipt) { setMessage('ارفقي إيصال تحويل العربون لإرسال الطلب.'); return }
     if (!settings) { setMessage('إعدادات الدفع غير متاحة حاليًا.'); return }
-    if (receipt.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(receipt.type)) {
+    if (deliveryFee > 0 && !receipt) { setMessage('ارفقي إيصال تحويل رسوم التوصيل لإرسال الطلب.'); return }
+    if (receipt && (receipt.size > 5 * 1024 * 1024 || !['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(receipt.type))) {
       setMessage('يسمح بملفات JPG أو PNG أو WebP أو PDF بحجم أقصى 5 ميجابايت.')
       return
     }
@@ -174,18 +174,20 @@ export function CheckoutPage() {
     if (orderError || !orderId) { setBusy(false); setMessage(`تعذر إنشاء الطلب: ${orderError?.message || 'خطأ غير معروف'}`); return }
     const { data: userData, error: userError } = await supabase.auth.getUser()
     if (userError || !userData.user) { setBusy(false); setMessage('تعذر التحقق من الحساب. سجلي الدخول مرة أخرى.'); return }
-    const path = `${userData.user.id}/${orderId}/${crypto.randomUUID()}-${receipt.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
-    const { error: uploadError } = await supabase.storage.from('payment-receipts').upload(path, receipt, { contentType: receipt.type, upsert: false })
-    if (uploadError) { setBusy(false); setMessage(`تم إنشاء الطلب رقم ${orderId} لكن تعذر رفع الإيصال: ${uploadError.message}`); return }
-    const { error: receiptError } = await supabase.from('payment_receipts').insert({ order_id: orderId, user_id: userData.user.id, storage_path: path })
-    if (receiptError) { setBusy(false); setMessage(`تم حفظ الطلب لكن تعذر تسجيل الإيصال: ${receiptError.message}`); return }
+    if (receipt) {
+      const path = `${userData.user.id}/${orderId}/${crypto.randomUUID()}-${receipt.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      const { error: uploadError } = await supabase.storage.from('payment-receipts').upload(path, receipt, { contentType: receipt.type, upsert: false })
+      if (uploadError) { setBusy(false); setMessage(`تم إنشاء الطلب رقم ${orderId} لكن تعذر رفع الإيصال: ${uploadError.message}`); return }
+      const { error: receiptError } = await supabase.from('payment_receipts').insert({ order_id: orderId, user_id: userData.user.id, storage_path: path })
+      if (receiptError) { setBusy(false); setMessage(`تم حفظ الطلب لكن تعذر تسجيل الإيصال: ${receiptError.message}`); return }
+    }
     writeCart([])
     setBusy(false)
     navigate(`/orders/${orderId}`)
   }
 
   return <main className="page-main checkout-page">
-    <div className="page-title"><p className="eyebrow">خطوة أخيرة</p><h1>إتمام الطلب</h1><p>أكملي بياناتك واختاري طريقة الدفع لإرسال طلبك بكل سهولة.</p></div>
+    <div className="page-title"><p className="eyebrow">خطوة أخيرة</p><h1>إتمام الطلب</h1><p>أكملي بياناتك لتأكيد الطلب؛ رسوم التوصيل فقط تُدفع الآن وقيمة المنتجات عند الاستلام.</p></div>
     <div className="checkout-steps" aria-label="خطوات الطلب">
       <span className="checkout-step-done"><i><Check size={13} /></i> السلة</span><span className="checkout-step-line" />
       <span className="checkout-step-active"><i>٢</i> بيانات الطلب</span><span className="checkout-step-line" />
@@ -195,15 +197,18 @@ export function CheckoutPage() {
       <div className="admin-card checkout-fields">
         <div className="checkout-section-heading"><span><MapPin size={18} /></span><div><h2>عنوان التوصيل</h2><p>أين نرسل طلبك؟</p></div></div>
         {([['recipient_name', 'الاسم الكامل'], ['phone', 'رقم الهاتف'], ['region', 'المحافظة / المنطقة'], ['city', 'المدينة'], ['address_line', 'العنوان بالتفصيل']] as const).map(([field, label]) => <label className="checkout-label" key={field}>{label}<input required value={address[field]} onChange={(event) => setAddress({ ...address, [field]: event.target.value })} /></label>)}
-        <label className="checkout-label">ملاحظات إضافية<textarea placeholder="تفاصيل تساعدنا في توصيل طلبك…" value={note} onChange={(event) => setNote(event.target.value)} /></label>
-        <div className="checkout-section-heading checkout-payment-heading"><span><CreditCard size={18} /></span><div><h2>إيصال العربون</h2><p>أرفقي إيصال التحويل لتأكيد طلبك</p></div></div>
-        <div className="transfer-details"><CreditCard size={17} /><p>{settings?.transfer_details || 'بيانات التحويل ستظهر هنا بعد إضافتها من إعدادات المتجر.'}</p></div>
-        <label className="checkout-receipt-upload">
-          <input required type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setReceipt(event.target.files?.[0] || null)} />
-          <span className="checkout-upload-icon"><Upload size={19} /></span>
-          <span className="checkout-upload-copy"><b>{receipt?.name || 'ارفقي صورة أو ملف الإيصال'}</b><small>{receipt ? 'تم اختيار الملف بنجاح' : 'JPG أو PNG أو WebP أو PDF · بحد أقصى 5 ميجابايت'}</small></span>
-          <span className="checkout-upload-action">{receipt ? 'تغيير الملف' : 'اختيار ملف'}</span>
-        </label>
+        <label className="checkout-label checkout-map-label">رابط موقع Google Maps <small>اختياري — يساعدنا في الوصول إليكِ بدقة</small><input type="url" placeholder="https://maps.google.com/…" value={address.map_url} onChange={(event) => setAddress({ ...address, map_url: event.target.value })} /></label>
+        <label className="checkout-label checkout-note-label">ملاحظات إضافية<textarea placeholder="تفاصيل تساعدنا في توصيل طلبك…" value={note} onChange={(event) => setNote(event.target.value)} /></label>
+        {deliveryFee > 0 && <>
+          <div className="checkout-section-heading checkout-payment-heading"><span><CreditCard size={18} /></span><div><h2>إيصال رسوم التوصيل</h2><p>ادفعي رسوم التوصيل فقط، وقيمة المنتجات عند الاستلام</p></div></div>
+          <div className="transfer-details"><CreditCard size={17} /><p>{settings?.transfer_details || 'بيانات تحويل رسوم التوصيل ستظهر هنا بعد إضافتها من إعدادات المتجر.'}</p></div>
+          <label className="checkout-receipt-upload">
+            <input required type="file" accept="image/jpeg,image/png,image/webp,application/pdf" onChange={(event) => setReceipt(event.target.files?.[0] || null)} />
+            <span className="checkout-upload-icon"><Upload size={19} /></span>
+            <span className="checkout-upload-copy"><b>{receipt?.name || 'ارفقي إيصال تحويل رسوم التوصيل'}</b><small>{receipt ? 'تم اختيار الملف بنجاح' : 'JPG أو PNG أو WebP أو PDF · بحد أقصى 5 ميجابايت'}</small></span>
+            <span className="checkout-upload-action">{receipt ? 'تغيير الملف' : 'اختيار ملف'}</span>
+          </label>
+        </>}
       </div>
       <aside className="admin-card order-summary">
         <div className="order-summary-title"><span><ShoppingBag size={18} /></span><h2>ملخص الطلب</h2></div>
@@ -212,12 +217,12 @@ export function CheckoutPage() {
         <div><span>المجموع بعد الخصم</span><b>{money(subtotal)}</b></div>
         <div><span>التوصيل</span><b>{money(settings?.delivery_fee || 0)}</b></div>
         <div className="checkout-grand-total"><span>إجمالي الطلب</span><b>{money(total)}</b></div>
-        <div className="checkout-deposit"><span>العربون المطلوب</span><b>{money(deposit)}</b></div>
-        <div className="checkout-remaining"><span>المتبقي عند الاستلام</span><b>{money(total - deposit)}</b></div>
-        <div className="checkout-delivery-note"><Truck size={16} /><span>رسوم التوصيل محسوبة ضمن الإجمالي.</span></div>
+        <div className="checkout-deposit"><span>المطلوب دفعه الآن (التوصيل)</span><b>{money(deliveryFee)}</b></div>
+        <div className="checkout-remaining"><span>قيمة المنتجات عند الاستلام</span><b>{money(subtotal)}</b></div>
+        <div className="checkout-delivery-note"><Truck size={16} /><span>تُدفع رسوم التوصيل فقط الآن، وباقي قيمة الطلب عند الاستلام.</span></div>
         {message && <ToastMessage message={message} />}
         <button disabled={busy || cart.length === 0} className="button button-dark full-button">{busy ? 'جارٍ إرسال طلبك…' : 'تأكيد الطلب'} <ArrowLeft size={16} /></button>
-        <p className="checkout-secure-note"><ShieldCheck size={15} /> إتمام آمن — لا يتم إرسال طلبك قبل إرفاق الإيصال</p>
+        <p className="checkout-secure-note"><ShieldCheck size={15} /> {deliveryFee > 0 ? 'إرفاق إيصال رسوم التوصيل مطلوب لتأكيد الطلب' : 'التوصيل مجاني — ادفعي قيمة المنتجات عند الاستلام'}</p>
       </aside>
     </form>}
   </main>

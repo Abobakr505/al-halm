@@ -1,7 +1,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, BadgeCheck, CalendarDays, Heart, LogOut, MapPin, PackageCheck, Sparkles, Trash2, Truck, UserRound } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, CalendarDays, ExternalLink, Heart, LogOut, MapPin, PackageCheck, Sparkles, Trash2, Truck, UserRound } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { orderStatusLabels, type OrderStatus } from '../types'
 import { EmptyState, ToastMessage } from '../components/Common'
@@ -15,6 +15,7 @@ type Address = {
   region: string
   city: string
   address_line: string
+  map_url: string | null
   notes: string | null
   is_default: boolean
 }
@@ -134,12 +135,31 @@ export function AccountPage() {
     region: '',
     city: '',
     address_line: '',
+    map_url: '',
     notes: ''
   })
 
   const [editingAddress, setEditingAddress] = useState<string | null>(null)
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  const [logoutConfirm, setLogoutConfirm] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+  const logoutCancelRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!logoutConfirm) return
+    const previousOverflow = document.body.style.overflow
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !signingOut) setLogoutConfirm(false)
+    }
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', closeOnEscape)
+    logoutCancelRef.current?.focus()
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [logoutConfirm, signingOut])
 
   const loadAccount = async () => {
     if (!supabase) return
@@ -162,7 +182,7 @@ export function AccountPage() {
 
       supabase
         .from('addresses')
-        .select('id,recipient_name,phone,region,city,address_line,notes,is_default')
+        .select('id,recipient_name,phone,region,city,address_line,map_url,notes,is_default')
         .eq('user_id', userData.user.id)
         .order('created_at', { ascending: false }),
 
@@ -237,6 +257,15 @@ export function AccountPage() {
     event.preventDefault()
 
     if (!supabase || busy) return
+    if (address.map_url.trim()) {
+      try {
+        const url = new URL(address.map_url.trim())
+        if (!['http:', 'https:'].includes(url.protocol)) throw new Error()
+      } catch {
+        setMessage('أدخلي رابط خرائط Google صحيحًا أو اتركي الحقل فارغًا.')
+        return
+      }
+    }
 
     setBusy(true)
     setMessage('')
@@ -273,6 +302,7 @@ export function AccountPage() {
           region: '',
           city: '',
           address_line: '',
+          map_url: '',
           notes: ''
         })
 
@@ -326,11 +356,15 @@ export function AccountPage() {
 
   const signOut = async () => {
     if (!supabase) return
-
-    const { error } = await supabase.auth.signOut()
-
-    if (error) {
-      setMessage(`تعذر تسجيل الخروج: ${error.message}`)
+    setSigningOut(true)
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      setLogoutConfirm(false)
+    } catch (error) {
+      setSigningOut(false)
+      setMessage(`تعذر تسجيل الخروج: ${error instanceof Error ? error.message : 'حدث خطأ غير معروف.'}`)
+      setLogoutConfirm(false)
     }
   }
 
@@ -424,13 +458,16 @@ export function AccountPage() {
                   ['region', 'المنطقة'],
                   ['city', 'المدينة'],
                   ['address_line', 'العنوان بالتفصيل'],
+                  ['map_url', 'رابط موقع Google Maps (اختياري)'],
                   ['notes', 'ملاحظات']
                 ] as const
               ).map(([field, label]) => (
                 <label key={field}>
                   {label}
                   <input
-                    required={field !== 'notes'}
+                    required={field !== 'notes' && field !== 'map_url'}
+                    type={field === 'map_url' ? 'url' : 'text'}
+                    placeholder={field === 'map_url' ? 'https://maps.google.com/…' : undefined}
                     value={address[field]}
                     onChange={(event) =>
                       setAddress({
@@ -462,6 +499,7 @@ export function AccountPage() {
                       region: '',
                       city: '',
                       address_line: '',
+                      map_url: '',
                       notes: ''
                     })
                   }}
@@ -488,6 +526,7 @@ export function AccountPage() {
                       <br />
                       {item.address_line}
                     </p>
+                    {item.map_url && <a className="address-map-link" href={item.map_url} target="_blank" rel="noopener noreferrer"><MapPin size={14} /> فتح الموقع على الخريطة <ExternalLink size={13} /></a>}
                   </div>
 
                   <div className="address-controls">
@@ -506,6 +545,7 @@ export function AccountPage() {
                           region: item.region,
                           city: item.city,
                           address_line: item.address_line,
+                          map_url: item.map_url || '',
                           notes: item.notes || ''
                         })
                       }}
@@ -525,15 +565,26 @@ export function AccountPage() {
           </section>
 
           <div className="account-actions">
-            <Link className="account-orders-link" to="/orders"><PackageCheck size={16} /> عرض جميع طلباتي <ArrowLeft size={15} /></Link>
-            <button className="text-link account-signout" onClick={() => void signOut()}>
-              <LogOut size={15} />
-              تسجيل الخروج
+            <Link className="account-orders-link" to="/orders"><PackageCheck size={17} /><span><b>طلباتي</b><small>تابعي حالة ومعلومات طلباتك</small></span><ArrowLeft size={16} /></Link>
+            <button className="account-signout" onClick={() => setLogoutConfirm(true)}>
+              <LogOut size={16} /><span>تسجيل الخروج</span>
             </button>
 
             {message && <ToastMessage message={message} />}
           </div>
         </div>
+        {logoutConfirm && <div className="account-confirm-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !signingOut) setLogoutConfirm(false) }}>
+          <section className="account-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="logout-confirm-title" aria-describedby="logout-confirm-description">
+            <span className="account-confirm-icon"><LogOut size={21} /></span>
+            <p className="eyebrow">مساحتك في الحلم</p>
+            <h2 id="logout-confirm-title">هل تريدين تسجيل الخروج؟</h2>
+            <p id="logout-confirm-description">يمكنكِ العودة إلى حسابكِ في أي وقت لمتابعة طلباتكِ ومفضّلتكِ.</p>
+            <div className="account-confirm-actions">
+              <button ref={logoutCancelRef} type="button" disabled={signingOut} onClick={() => setLogoutConfirm(false)}>البقاء في حسابي</button>
+              <button type="button" className="account-confirm-logout" disabled={signingOut} onClick={() => void signOut()}><LogOut size={15} />{signingOut ? 'جارٍ تسجيل الخروج…' : 'نعم، تسجيل الخروج'}</button>
+            </div>
+          </section>
+        </div>}
       </main>
     </AuthGate>
   )
@@ -607,7 +658,7 @@ export function OrdersPage() {
                   <div className="order-row-title"><b>طلب رقم #{order.order_number}</b><span className={`status-pill status-${statusTone}`}>{orderStatusLabels[order.status]}</span></div>
                   <small><CalendarDays size={13} /> {new Date(order.created_at).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })}</small>
                 </div>
-                <div className="order-row-payment"><small>إجمالي الطلب</small><b>{money(Number(order.total))}</b><span>العربون {money(Number(order.deposit_amount))}</span></div>
+                <div className="order-row-payment"><small>إجمالي الطلب</small><b>{money(Number(order.total))}</b><span>المدفوع مقدمًا {money(Number(order.deposit_amount))}</span></div>
                 <span className="order-row-arrow"><ArrowLeft size={17} /></span>
               </Link>
             })}
@@ -1508,7 +1559,7 @@ export function OrderDetailsPage() {
                   </div>
 
                   <div>
-                    <span>العربون</span>
+                    <span>المدفوع مقدمًا</span>
                     <b>{money(order.deposit_amount)}</b>
                   </div>
 
@@ -1522,7 +1573,7 @@ export function OrderDetailsPage() {
 
                     <b>
                       {order.payment_status === 'deposit_confirmed'
-                        ? 'تم تأكيد العربون'
+                        ? 'تم تأكيد رسوم التوصيل'
                         : order.payment_status === 'rejected'
                           ? 'الإيصال مرفوض'
                           : order.payment_status === 'paid'
@@ -1552,17 +1603,16 @@ export function OrderDetailsPage() {
 
                 {order.payment_status === 'rejected' && (
                   <form className="receipt-form" onSubmit={uploadReceipt}>
-                    <label>
-                      ارفعي إيصالًا جديدًا
-
+                    <label className="checkout-receipt-upload">
                       <input
                         required
                         type="file"
                         accept="image/jpeg,image/png,image/webp,application/pdf"
-                        onChange={(event) =>
-                          setReceipt(event.target.files?.[0] || null)
-                        }
+                        onChange={(event) => setReceipt(event.target.files?.[0] || null)}
                       />
+                      <span className="checkout-upload-icon"><Upload size={19} /></span>
+                      <span className="checkout-upload-copy"><b>{receipt?.name || 'ارفعي إيصالًا جديدًا'}</b><small>{receipt ? 'تم اختيار الملف بنجاح' : 'صورة أو PDF · بحد أقصى 5 ميجابايت'}</small></span>
+                      <span className="checkout-upload-action">{receipt ? 'تغيير الملف' : 'اختيار ملف'}</span>
                     </label>
 
                     <button
@@ -1606,6 +1656,7 @@ export function OrderDetailsPage() {
                   <br />
                   {order.address_snapshot.address_line}
                 </p>
+                {order.address_snapshot.map_url && <a className="address-map-link" href={order.address_snapshot.map_url} target="_blank" rel="noopener noreferrer"><MapPin size={14} /> فتح الموقع على الخريطة <ExternalLink size={13} /></a>}
 
                 {order.customer_note && (
                   <p>ملاحظات: {order.customer_note}</p>

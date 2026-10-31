@@ -37,8 +37,8 @@ export type OrderStatus =
 
 export const orderStatusLabels: Record<OrderStatus, string> = {
   received: 'تم استلام الطلب',
-  awaiting_deposit_review: 'بانتظار مراجعة العربون',
-  deposit_confirmed: 'تم تأكيد العربون',
+  awaiting_deposit_review: 'بانتظار مراجعة رسوم التوصيل',
+  deposit_confirmed: 'تم تأكيد رسوم التوصيل',
   preparing: 'جاري تجهيز الطلب',
   shipped: 'تم شحن الطلب',
   out_for_delivery: 'الطلب في الطريق',
