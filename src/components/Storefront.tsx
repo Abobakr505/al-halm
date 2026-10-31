@@ -373,7 +373,6 @@ export function HomePage() {
           <Link className="text-link" to="/about">
             اكتشفي حكايتنا <ArrowLeft size={16} />
           </Link>
-          <span className="story-number">01 / 03</span>
         </div>
       </section>
       <section className="newsletter">

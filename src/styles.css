@@ -73,7 +73,7 @@ img { display: block; max-width: 100%; }
 .icon-button { border: 0; width: 35px; height: 35px; background: transparent; border-radius: 50%; display: inline-grid; place-items: center; cursor: pointer; color: var(--ink); position: relative; }
 .icon-button:hover { background: var(--soft); }
 .icon-button svg { width: 17px; height: 17px; stroke-width: 1.5; }
-.bag-count { position: absolute; top: -6px; right: -7px; min-width: 19px; height: 19px; padding: 0 5px; border: 2px solid var(--paper); border-radius: 999px; background: #a44839; color: white; font-size: 9px; font-weight: 600; line-height: 1; display: grid; place-items: center; box-shadow: 0 2px 6px rgb(36 35 31 / 18%); }
+.bag-count { position: absolute; top: -6px; right: -7px; min-width: 19px; height: 19px; padding: 0 5px; border: 2px solid var(--paper); border-radius: 999px; background: var(--hero-stamp-bg); color: white; font-size: 9px; font-weight: 600; line-height: 1; display: grid; place-items: center; box-shadow: 0 2px 6px rgb(36 35 31 / 18%); }
 .mobile-menu { display: none; }
 .config-banner { text-align: center; padding: 9px 16px; background: #eee6d7; color: #5e4d32; font-size: 11px; }
 .config-banner a { text-decoration: underline; margin-inline-start: 5px; }
@@ -1643,4 +1643,295 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline-offs
   display: flex;
   justify-content: center;
   gap: 10px;
+}
+/* =========================================================
+   animations.css — طبقة الحركات والتفاصيل الإضافية
+   استورديه بعد index.css:  import './animations.css'
+   ========================================================= */
+
+/* ---------- 1) Reveal عند التمرير ---------- */
+[data-rv]:not([data-in]) { opacity: 0; }
+[data-rv][data-in] {
+  animation-duration: .85s;
+  animation-timing-function: cubic-bezier(.2, .7, .25, 1);
+  animation-fill-mode: both;
+  animation-delay: var(--rv-delay, 0ms);
+}
+[data-rv="up"][data-in]    { animation-name: rv-up; }
+[data-rv="zoom"][data-in]  { animation-name: rv-zoom; }
+[data-rv="right"][data-in] { animation-name: rv-right; }
+[data-rv="left"][data-in]  { animation-name: rv-left; }
+[data-rv="fade"][data-in]  { animation-name: rv-fade; }
+
+@keyframes rv-up    { from { opacity: 0; translate: 0 34px; } to { opacity: 1; translate: 0 0; } }
+@keyframes rv-zoom  { from { opacity: 0; translate: 0 26px; scale: .94; } to { opacity: 1; translate: 0 0; scale: 1; } }
+@keyframes rv-right { from { opacity: 0; translate: 60px 0; } to { opacity: 1; translate: 0 0; } }
+@keyframes rv-left  { from { opacity: 0; translate: -60px 0; } to { opacity: 1; translate: 0 0; } }
+@keyframes rv-fade  { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- 2) شريط التقدم + زر الأعلى ---------- */
+.scroll-progress {
+  position: fixed; z-index: 120; top: 0; right: 0; left: 0; height: 3px;
+  background: linear-gradient(270deg, var(--gold), #e6d3a8, var(--gold));
+  transform-origin: right; transform: scaleX(var(--scroll-progress, 0));
+  pointer-events: none;
+}
+.back-to-top {
+  position: fixed; z-index: 19; right: 22px; bottom: 24px; width: 46px; height: 46px;
+  display: grid; place-items: center; border: 1px solid var(--gold); border-radius: 50%;
+  background: var(--surface); color: var(--gold); cursor: pointer;
+  box-shadow: 0 8px 22px rgb(36 35 31 / 14%);
+  opacity: 0; visibility: hidden; transform: translateY(18px) scale(.8);
+  transition: opacity .3s, transform .3s, visibility 0s linear .3s, background .2s, color .2s;
+}
+.back-to-top.show { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+.back-to-top:hover { background: var(--gold); color: #fff; transform: translateY(-4px); }
+
+/* ---------- 3) الهيدر ---------- */
+.site-header { transition: height .3s ease, box-shadow .3s ease, background .3s ease; }
+.site-header.scrolled {
+  height: 68px;
+  box-shadow: 0 8px 28px rgb(36 35 31 / 8%);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(12px);
+}
+.main-nav > a:not(.mobile-nav-arrow) { position: relative; padding-block: 6px; }
+@media (min-width: 641px) {
+  .main-nav > a::after {
+    content: ""; position: absolute; bottom: 0; right: 0; width: 100%; height: 1px;
+    background: var(--gold); transform: scaleX(0); transform-origin: right;
+    transition: transform .35s cubic-bezier(.2, .7, .25, 1);
+  }
+  .main-nav > a:hover::after { transform: scaleX(1); }
+}
+.bag-count { animation: bag-pop .35s cubic-bezier(.2,.8,.2,1.4) both, badge-ping 3.5s ease-in-out 1.5s infinite; }
+@keyframes badge-ping {
+  0%, 80%, 100% { box-shadow: 0 2px 6px rgb(36 35 31 / 18%); }
+  90% { box-shadow: 0 0 0 7px rgb(164 72 57 / 20%); }
+}
+.brand-mark { overflow: hidden; }
+.brand-mark img { width: 100%; height: 100%; object-fit: cover; }
+.announcement span { display: inline-block; animation: spark 3s ease-in-out infinite; }
+@keyframes spark { 0%, 100% { transform: rotate(0) scale(1); } 50% { transform: rotate(180deg) scale(1.3); } }
+
+/* ---------- 4) الهيرو ---------- */
+.hero { overflow: hidden; }
+.hero::before, .hero::after {
+  content: ""; position: absolute; border-radius: 50%; pointer-events: none; z-index: 0;
+}
+.hero::before {
+  width: 420px; height: 420px; top: -150px; left: -120px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--gold) 22%, transparent), transparent 70%);
+  animation: blob-float 11s ease-in-out infinite;
+}
+.hero::after {
+  width: 320px; height: 320px; bottom: -120px; right: 22%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--gold) 16%, transparent), transparent 70%);
+  animation: blob-float 14s ease-in-out -4s infinite reverse;
+}
+.hero > :not(.hero-vertical) { position: relative; z-index: 1; }
+@keyframes blob-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40px, 30px) scale(1.12); }
+}
+.hero-image > img {
+  transform: translateY(calc(var(--scroll-y, 0) * -.05px)) scale(1.08);
+  transition: transform .15s linear;
+  will-change: transform;
+}
+.hero-image { overflow: visible; }
+.hero-image > img { clip-path: inset(0); }
+.hero h1 { animation-delay: .1s; }
+.hero h1 em, .story-copy h2 em, .newsletter h2 em, .about-hero-copy h1 em, .about-story-heading h2 em, .contact-hero-copy h1 em, .not-found-copy h1 em {
+  background: linear-gradient(100deg, var(--gold) 20%, #ecd9ae 50%, var(--gold) 80%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
+  animation: gold-flow 6s linear infinite;
+}
+@keyframes gold-flow { to { background-position: -220% 0; } }
+.hero-copy, .hero .button, .hero-note { animation: rise-in .9s cubic-bezier(.2,.7,.25,1) both; }
+.hero-copy { animation-delay: .25s; }
+.hero .button { animation-delay: .4s; }
+.hero-note { animation-delay: .55s; }
+.hero-note .note-line { animation: line-grow .8s ease-out .9s both; transform-origin: right; }
+.hero-vertical { animation: vertical-breathe 5s ease-in-out infinite; }
+@keyframes vertical-breathe { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+.image-caption { animation: rise-in .8s ease-out 1.1s both; }
+.hero-stamp { box-shadow: 0 10px 28px rgb(36 35 31 / 22%); }
+
+/* ---------- 5) شريط الثقة ---------- */
+.trust-row > div:hover svg { animation: icon-wiggle .6s ease; }
+@keyframes icon-wiggle {
+  0%, 100% { transform: rotate(0) scale(1.12); }
+  25% { transform: rotate(-12deg) scale(1.12); }
+  75% { transform: rotate(12deg) scale(1.12); }
+}
+
+/* ---------- 6) عناوين الأقسام ---------- */
+.section-heading h2, .page-title h1 { position: relative; }
+.section-heading .eyebrow::before, .page-title .eyebrow::before {
+  content: ""; display: inline-block; width: 0; height: 1px; margin-inline-end: 0;
+  background: var(--gold); vertical-align: middle;
+  transition: width .8s cubic-bezier(.2,.7,.25,1) .3s, margin .8s ease .3s;
+}
+[data-in] .eyebrow::before, [data-in].eyebrow::before { width: 26px; margin-inline-end: 10px; }
+.text-link { position: relative; }
+.text-link::after {
+  content: ""; position: absolute; right: 0; bottom: -4px; width: 100%; height: 1px;
+  background: var(--gold); transform: scaleX(0); transform-origin: right; transition: transform .35s ease;
+}
+.text-link:hover::after { transform: scaleX(1); }
+
+/* ---------- 7) البطاقات (أقسام، منتجات، عروض) ---------- */
+.product-photo::after, .promotion-card::before {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(110deg, transparent 35%, rgb(255 255 255 / 28%) 50%, transparent 65%);
+  transform: translateX(-130%); transition: transform .9s ease;
+}
+.product-card:hover .product-photo::after, .promotion-card:hover::before { transform: translateX(130%); }
+.product-badge, .favorite-button, .sold-out-badge { z-index: 2; }
+.product-badge { transition: transform .3s ease, background .3s ease, color .3s ease; }
+.product-card:hover .product-badge { transform: translateY(-2px); background: var(--gold); color: #fff; }
+.product-card .product-meta, .product-card .product-price { transition: transform .3s ease; }
+.product-card:hover .product-meta { transform: translateX(-3px); }
+.quick-add-wrap { opacity: .92; transition: opacity .25s, transform .3s; }
+.product-card:hover .quick-add-wrap { opacity: 1; transform: translateY(-2px); }
+.discount-price-badge { animation: tag-pulse 2.8s ease-in-out infinite; }
+@keyframes tag-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold) 0%, transparent); }
+  50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--gold) 18%, transparent); }
+}
+.promotion-card-badge { animation: badge-swing 4s ease-in-out infinite; transform-origin: top right; }
+@keyframes badge-swing { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-3deg); } }
+.promotion-card-copy { transition: transform .45s cubic-bezier(.2,.7,.25,1); }
+.promotion-card:hover .promotion-card-copy { transform: translateY(-6px); }
+.promotion-card-copy > span svg { transition: transform .3s; }
+.promotion-card:hover .promotion-card-copy > span svg { transform: translateX(-6px); }
+.category-card-index { transition: background .3s, transform .4s; }
+.category-store-card:hover .category-card-index { background: var(--gold); transform: rotate(360deg); }
+.category-store-card .category-card-content > i svg { transition: transform .3s; }
+.category-store-card:hover .category-card-content > i svg { transform: translateX(-6px); }
+.favorite-button.is-favorite { animation: heart-beat 1.8s ease-in-out infinite; }
+@keyframes heart-beat { 0%, 60%, 100% { transform: scale(1); } 70% { transform: scale(1.12); } 80% { transform: scale(1); } 90% { transform: scale(1.08); } }
+.no-image { animation: gold-breathe 4s ease-in-out infinite; }
+@keyframes gold-breathe { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.06); } }
+
+/* ---------- 8) قصتنا + النشرة ---------- */
+.story-number { animation: vertical-breathe 4s ease-in-out infinite; }
+.story-section::before { animation: frame-shift 7s ease-in-out infinite; }
+@keyframes frame-shift { 0%, 100% { inset: 18px -18px -18px 18px; } 50% { inset: 24px -24px -24px 24px; } }
+.newsletter::before { animation: orbit-pulse 8s ease-in-out infinite; }
+.newsletter::after {
+  content: ""; position: absolute; width: 190px; aspect-ratio: 1; bottom: -110px; right: -60px;
+  border: 1px solid color-mix(in srgb, var(--gold) 26%, transparent); border-radius: 50%;
+  box-shadow: 0 0 0 18px color-mix(in srgb, var(--gold) 6%, transparent);
+  animation: orbit-pulse 10s ease-in-out -3s infinite; pointer-events: none;
+}
+@keyframes orbit-pulse { 0%, 100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.18); opacity: .5; } }
+.newsletter-actions .button-outline:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgb(0 0 0 / 22%); }
+
+/* ---------- 9) صفحة من نحن ---------- */
+.about-hero-image::after { animation: frame-shift-s 7s ease-in-out infinite; }
+@keyframes frame-shift-s { 0%, 100% { inset: 16px -16px -16px 16px; } 50% { inset: 22px -22px -22px 22px; } }
+.about-hero-image > span { animation: rise-in .9s ease-out .9s both; }
+.about-values-grid article { transition: transform .35s ease, border-color .35s ease, box-shadow .35s ease; }
+.about-values-grid article:hover { transform: translateY(-8px); border-color: var(--gold); box-shadow: 0 18px 38px rgb(36 35 31 / 9%); }
+.about-values-grid article > span { transition: transform .5s ease, background .3s, color .3s; }
+.about-values-grid article:hover > span { transform: rotateY(360deg); background: var(--gold); color: #fff; }
+.about-quote { position: relative; overflow: hidden; }
+.about-quote::before {
+  content: "“"; position: absolute; top: -30px; right: 8%; font-family: var(--serif); font-size: 260px; line-height: 1;
+  color: color-mix(in srgb, var(--gold) 20%, transparent); animation: vertical-breathe 6s ease-in-out infinite;
+}
+.about-hero-note span { animation: line-grow .8s ease-out 1s both; transform-origin: right; }
+
+/* ---------- 10) التواصل والأسئلة ---------- */
+.contact-hero-mark { animation: stamp-float 6s ease-in-out infinite; }
+.contact-card-icon { transition: transform .4s ease, background .3s, color .3s; }
+.contact-card:hover .contact-card-icon { background: var(--gold); color: #fff; transform: rotate(-8deg) scale(1.08); }
+.faq-question { transition: color .25s, padding .25s; }
+.faq-question:hover { color: var(--gold); padding-inline-start: 8px; }
+
+/* ---------- 11) صفحة المنتج ---------- */
+.detail-copy > * { transition: transform .3s ease; }
+.detail-price { animation: price-glow 3.5s ease-in-out infinite; }
+@keyframes price-glow { 0%, 100% { text-shadow: none; } 50% { text-shadow: 0 0 14px color-mix(in srgb, var(--gold) 35%, transparent); } }
+.choice.selected { animation: choice-pop .35s cubic-bezier(.2,.8,.2,1.4); background: color-mix(in srgb, var(--gold) 10%, var(--surface)); }
+@keyframes choice-pop { 0% { transform: scale(.9); } 100% { transform: scale(1); } }
+.detail-thumbnails button.selected { transform: translateY(-3px); box-shadow: 0 8px 18px rgb(36 35 31 / 14%); }
+.gallery-arrow { opacity: 0; transition: opacity .3s, background .2s, color .2s, transform .2s; }
+.detail-image-frame:hover .gallery-arrow, .gallery-arrow:focus-visible { opacity: 1; }
+@media (hover: none) { .gallery-arrow { opacity: 1; } }
+.delivery-note svg { animation: truck-drive 3.2s ease-in-out infinite; }
+@keyframes truck-drive { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(-5px); } }
+.full-button { animation: cta-glow 3.5s ease-in-out 1.5s infinite; }
+@keyframes cta-glow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--gold) 16%, transparent); }
+}
+.image-modal-stage img { animation: modal-img-in .35s cubic-bezier(.2,.7,.25,1) both; }
+@keyframes modal-img-in { from { opacity: 0; scale: .94; } to { opacity: 1; scale: 1; } }
+
+/* ---------- 12) الفلاتر والتحميل ---------- */
+.product-toolbar select, .product-toolbar .search-field, .product-toolbar .price-filter, .discount-filter { transition: border-color .25s, box-shadow .25s, transform .25s; }
+.product-toolbar select:hover, .product-toolbar .search-field:hover, .product-toolbar .price-filter:hover { border-color: var(--gold); transform: translateY(-1px); }
+.product-toolbar .search-field:focus-within, .product-toolbar select:focus { border-color: var(--gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 14%, transparent); }
+.clear-product-filters { animation: rv-zoom .35s ease both; }
+.products-count { animation: tag-pulse 3s ease-in-out infinite; }
+.products-hero-seal, .categories-hero-mark { animation: seal-float 6s ease-in-out infinite; }
+@keyframes seal-float { 0%, 100% { transform: translateY(-50%) rotate(0); } 50% { transform: translateY(calc(-50% - 7px)) rotate(4deg); } }
+.loading-message::after { content: ""; display: block; width: 34px; height: 34px; margin: 18px auto 0; border: 2px solid var(--line); border-top-color: var(--gold); border-radius: 50%; animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty-mark { animation: stamp-float 5s ease-in-out infinite; }
+
+/* ---------- 13) السلة والدفع ---------- */
+.cart-item-image img { transition: transform .5s ease; }
+.quantity-control button:active:not(:disabled) { transform: scale(.85); }
+.remove-line:hover svg { animation: icon-wiggle .5s ease; }
+.cart-summary-total b, .checkout-grand-total b { color: var(--gold); }
+.checkout-steps .checkout-step-active i { animation: tag-pulse 2.4s ease-in-out infinite; }
+.checkout-label input, .checkout-fields textarea, .auth-panel input { transition: border-color .25s, box-shadow .25s, background .25s; }
+.checkout-label input:focus, .auth-panel input:focus { background: var(--surface); }
+.checkout-receipt-upload:hover .checkout-upload-icon { transform: translateY(-3px); transition: transform .3s; }
+
+/* ---------- 14) الحساب والإدارة ---------- */
+.account-avatar { animation: stamp-float 6s ease-in-out infinite; }
+.account-overview article, .orders-overview > div, .stat-card { transition: transform .3s, border-color .3s, box-shadow .3s; }
+.account-overview article:hover, .orders-overview > div:hover, .stat-card:hover { transform: translateY(-4px); border-color: var(--gold); box-shadow: 0 12px 26px rgb(36 35 31 / 7%); }
+.dashboard-status-row i { animation: bar-grow 1.1s cubic-bezier(.2,.7,.25,1) both; transform-origin: right; }
+@keyframes bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.profile-completion i { animation: bar-grow 1s ease both; transform-origin: right; }
+.status-pill.status-pending, .status-pill.status-processing { animation: tag-pulse 2.6s ease-in-out infinite; }
+.admin-tabs a { position: relative; }
+.admin-tabs a::after { content: ""; position: absolute; right: 14px; left: 14px; bottom: 4px; height: 1px; background: var(--gold); transform: scaleX(0); transition: transform .3s ease; }
+.admin-tabs a:hover::after, .admin-tabs .active::after { transform: scaleX(1); }
+
+/* ---------- 15) الفوتر وواتساب والإشعارات ---------- */
+.footer-main a:not(.brand) { transition: color .2s, transform .25s; }
+.footer-main a:not(.brand):hover { transform: translateX(-5px); }
+.footer-bottom svg { animation: heart-beat 2s ease-in-out infinite; }
+.whatsapp-float { animation: float-bob 4s ease-in-out infinite; }
+@keyframes float-bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -6px; } }
+.toast-icon svg { animation: icon-pop .5s cubic-bezier(.2,.8,.2,1.4) both; }
+@keyframes icon-pop { from { transform: scale(0) rotate(-90deg); } to { transform: scale(1) rotate(0); } }
+
+/* ---------- 16) Ripple ---------- */
+.button, .quick-add { isolation: isolate; }
+.ripple {
+  position: absolute; z-index: 0; border-radius: 50%; pointer-events: none;
+  background: rgb(255 255 255 / 38%); transform: scale(0);
+  animation: ripple-out .7s ease-out forwards;
+}
+@keyframes ripple-out { to { transform: scale(1); opacity: 0; } }
+
+/* ---------- 17) صفحة 404 ---------- */
+.not-found-number { animation: vertical-breathe 5s ease-in-out infinite; }
+
+/* ---------- 18) تفضيل تقليل الحركة ---------- */
+@media (prefers-reduced-motion: reduce) {
+  [data-rv]:not([data-in]) { opacity: 1; }
+  [data-rv][data-in] { animation: none !important; }
+  .hero-image > img { transform: none !important; }
+  .scroll-progress { transition: none; }
 }
