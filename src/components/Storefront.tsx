@@ -6,6 +6,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type TouchEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   Link,
   useNavigate,
@@ -903,6 +904,8 @@ export function ProductDetailsPage() {
     visible: false,
     left: 0,
     top: 0,
+    backgroundWidth: 0,
+    backgroundHeight: 0,
     backgroundX: 0,
     backgroundY: 0,
   });
@@ -1176,7 +1179,25 @@ export function ProductDetailsPage() {
     frame: HTMLDivElement,
   ) => {
     const bounds = frame.getBoundingClientRect();
-    const lensSize = 160;
+    const lensSize =
+      Number.parseFloat(
+        getComputedStyle(frame).getPropertyValue("--magnifier-size"),
+      ) || 176;
+    const zoom =
+      (Number.parseFloat(
+        getComputedStyle(frame).getPropertyValue("--magnifier-zoom"),
+      ) || 165) / 100;
+    const image = frame.querySelector<HTMLImageElement>(".detail-photo img");
+    const imageScale = image?.naturalWidth && image.naturalHeight
+      ? (getComputedStyle(image).objectFit === "contain" ? Math.min : Math.max)(
+          bounds.width / image.naturalWidth,
+          bounds.height / image.naturalHeight,
+        )
+      : 1;
+    const imageWidth = (image?.naturalWidth ?? bounds.width) * imageScale;
+    const imageHeight = (image?.naturalHeight ?? bounds.height) * imageScale;
+    const imageOffsetX = (bounds.width - imageWidth) / 2;
+    const imageOffsetY = (bounds.height - imageHeight) / 2;
     const x = Math.max(
       lensSize / 2,
       Math.min(bounds.width - lensSize / 2, clientX - bounds.left),
@@ -1189,14 +1210,26 @@ export function ProductDetailsPage() {
       visible: true,
       left: x - lensSize / 2,
       top: y - lensSize / 2,
-      backgroundX:
-        bounds.width > lensSize
-          ? ((x - lensSize / 2) / (bounds.width - lensSize)) * 100
-          : 50,
-      backgroundY:
-        bounds.height > lensSize
-          ? ((y - lensSize / 2) / (bounds.height - lensSize)) * 100
-          : 50,
+      backgroundWidth: imageWidth * zoom,
+      backgroundHeight: imageHeight * zoom,
+      backgroundX: Math.max(
+        0,
+        Math.min(
+          100,
+          (((x - imageOffsetX) * zoom - lensSize / 2) /
+            (imageWidth * zoom - lensSize)) *
+            100,
+        ),
+      ),
+      backgroundY: Math.max(
+        0,
+        Math.min(
+          100,
+          (((y - imageOffsetY) * zoom - lensSize / 2) /
+            (imageHeight * zoom - lensSize)) *
+            100,
+        ),
+      ),
     });
   };
   const handleLensMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -1251,6 +1284,7 @@ export function ProductDetailsPage() {
                 left: lens.left,
                 top: lens.top,
                 backgroundImage: `url("${images[imageIndex].image_url}")`,
+                backgroundSize: `${lens.backgroundWidth}px ${lens.backgroundHeight}px`,
                 backgroundPosition: `${lens.backgroundX}% ${lens.backgroundY}%`,
               }}
               aria-hidden="true"
@@ -1339,25 +1373,48 @@ export function ProductDetailsPage() {
             "اختيرت تفاصيل هذه العباية بعناية لتمنحك إطلالة أنيقة ومريحة."}
         </p>
         <div className="choice-group">
-          <b>اللون</b>
+          <b className="choice-group-heading">
+            <span>اللون</span>
+            <small>{color || "اختاري اللون"}</small>
+          </b>
           <div>
             {colors.map((item) => (
               <button
+                type="button"
                 aria-pressed={color === item}
-                className={color === item ? "choice selected" : "choice"}
+                className={`choice choice-color${color === item ? " selected" : ""}`}
                 key={item}
                 onClick={() => {
+                  if (color === item) {
+                    if (size) return;
+                    setColor("");
+                    return;
+                  }
+                  if (
+                    size &&
+                    !product.variants?.some(
+                      (variant) =>
+                        variant.color === item &&
+                        variant.size === size &&
+                        variant.stock > 0,
+                    )
+                  ) {
+                    return;
+                  }
                   setColor(item);
-                  setSize("");
                 }}
               >
-                {item}
+                <span>{item}</span>
+                {color === item && <Check size={14} aria-hidden="true" />}
               </button>
             ))}
           </div>
         </div>
         <div className="choice-group">
-          <b>المقاس</b>
+          <b className="choice-group-heading">
+            <span>المقاس</span>
+            <small>{size ? `مقاس ${size}` : "اختاري المقاس"}</small>
+          </b>
           <div>
             {sizes.map((item) => {
               const variant = product.variants?.find(
@@ -1367,16 +1424,20 @@ export function ProductDetailsPage() {
               const outOfStock = !variant || variant.stock < 1;
               return (
                 <button
+                  type="button"
                   aria-pressed={size === item}
                   aria-label={
                     outOfStock ? `${item}، نفد المخزون` : `المقاس ${item}`
                   }
-                  className={`choice${size === item ? " selected" : ""}${outOfStock ? " out-of-stock" : ""}`}
+                  className={`choice choice-size${size === item ? " selected" : ""}${outOfStock ? " out-of-stock" : ""}`}
                   disabled={!variant}
                   key={item}
-                  onClick={() => setSize(item)}
+                  onClick={() =>
+                    setSize((selected) => (selected === item ? "" : item))
+                  }
                 >
-                  {item}
+                  <span>{item}</span>
+                  {size === item && <Check size={14} aria-hidden="true" />}
                   {outOfStock && <small>نفد</small>}
                 </button>
               );
@@ -1403,8 +1464,9 @@ export function ProductDetailsPage() {
           <Truck size={18} /> تُدفع رسوم التوصيل فقط عند الطلب، وقيمة المنتجات عند الاستلام.
         </div>
       </div>
-      {zoomOpen && (
-        <div
+      {zoomOpen &&
+        createPortal(
+          <div
           className="image-modal"
           role="dialog"
           aria-modal="true"
@@ -1488,8 +1550,9 @@ export function ProductDetailsPage() {
           <p className="image-modal-hint">
             استخدمي عجلة الفأرة أو الأزرار للتكبير والتصغير
           </p>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </main>
   );
 }
