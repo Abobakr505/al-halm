@@ -1540,6 +1540,8 @@ export function OrderDetailsPage() {
   const [receiptUrl, setReceiptUrl] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
+  const [cancelConfirm, setCancelConfirm] = useState(false)
+  const cancelDialogCancelRef = useRef<HTMLButtonElement>(null)
 
   const loadOrder = async () => {
     if (!supabase || !id) return
@@ -1595,10 +1597,21 @@ export function OrderDetailsPage() {
     void loadOrder()
   }, [id])
 
+  useEffect(() => {
+    if (!cancelConfirm) return
+
+    cancelDialogCancelRef.current?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !busy) setCancelConfirm(false)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [cancelConfirm, busy])
+
   const cancelOrder = async () => {
     if (!supabase || !id || busy) return
-
-    if (!window.confirm('هل تريدين إلغاء هذا الطلب؟')) return
 
     setBusy(true)
 
@@ -1610,9 +1623,12 @@ export function OrderDetailsPage() {
       if (error) {
         setMessage(`تعذر إلغاء الطلب: ${error.message}`)
       } else {
+        setCancelConfirm(false)
         setMessage('تم إلغاء الطلب.')
         await loadOrder()
       }
+    } catch (error) {
+      setMessage(`تعذر إلغاء الطلب: ${error instanceof Error ? error.message : 'حدث خطأ غير متوقع.'}`)
     } finally {
       setBusy(false)
     }
@@ -1878,7 +1894,7 @@ export function OrderDetailsPage() {
                   <button
                     className="button button-outline"
                     disabled={busy}
-                    onClick={() => void cancelOrder()}
+                    onClick={() => setCancelConfirm(true)}
                   >
                     إلغاء الطلب
                   </button>
@@ -1895,6 +1911,52 @@ export function OrderDetailsPage() {
           />
         )}
       </main>
+      {cancelConfirm && createPortal(
+        <div
+          className="admin-confirm-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !busy) {
+              setCancelConfirm(false)
+            }
+          }}
+        >
+          <section
+            className="admin-confirm-dialog"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="cancel-order-title"
+            aria-describedby="cancel-order-description"
+          >
+            <span className="admin-confirm-icon"><Trash2 size={22} /></span>
+            <p className="eyebrow">تأكيد إلغاء الطلب</p>
+            <h2 id="cancel-order-title">هل تريدين إلغاء الطلب رقم {order?.order_number}؟</h2>
+            <p id="cancel-order-description">
+              لا يمكن إعادة تفعيل الطلب بعد إلغائه. هل أنتِ متأكدة من المتابعة؟
+            </p>
+            <div className="admin-confirm-actions">
+              <button
+                ref={cancelDialogCancelRef}
+                className="admin-confirm-cancel"
+                type="button"
+                disabled={busy}
+                onClick={() => setCancelConfirm(false)}
+              >
+                تراجُع
+              </button>
+              <button
+                type="button"
+                className="admin-confirm-delete"
+                disabled={busy}
+                onClick={() => void cancelOrder()}
+              >
+                <Trash2 size={15} />
+                {busy ? 'جارٍ إلغاء الطلب…' : 'نعم، ألغِ الطلب'}
+              </button>
+            </div>
+          </section>
+        </div>,
+        document.body
+      )}
     </AuthGate>
   )
 }
