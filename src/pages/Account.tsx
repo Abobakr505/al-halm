@@ -4,7 +4,7 @@ import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-route
 import { ArrowLeft, BadgeCheck, BellRing, CalendarDays, ExternalLink, Heart, LogOut, MapPin, PackageCheck, Sparkles, Trash2, Truck, Upload, UserRound } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { orderStatusLabels, type OrderStatus } from '../types'
-import { EmptyState, ToastMessage } from '../components/Common'
+import { EmptyState, ToastMessage, useToast } from '../components/Common'
 import { money, categoryFallback } from '../components/Storefront'
 import { promotionPercent, promotionPrice } from '../lib/promotions'
 import { GOVERNORATES } from '../lib/governorates'
@@ -134,6 +134,7 @@ function AccountNavigation({ active }: { active: string }) {
 // ==============================
 
 export function AccountPage() {
+  const notify = useToast()
   const [profile, setProfile] = useState({
     email: '',
     full_name: '',
@@ -261,6 +262,7 @@ useEffect(() => {
         return
       }
       setStockAlerts((current) => current.filter((alert) => alert.id !== id))
+      notify('تم إخفاء تنبيه توفر المقاس.')
     } catch (error) {
       setMessage(`تعذر إخفاء تنبيه المخزون: ${error instanceof Error ? error.message : 'حدث خطأ غير معروف.'}`)
     }
@@ -409,6 +411,7 @@ if (address.address_line.trim().length < 10) {
     if (error) {
       setMessage(`تعذر تعيين العنوان الافتراضي: ${error.message}`)
     } else {
+      notify('تم تعيين العنوان الافتراضي.')
       await loadAccount()
     }
   }
@@ -429,6 +432,7 @@ if (address.address_line.trim().length < 10) {
         setAddressToDelete(null)
       } else {
         setAddressToDelete(null)
+        notify('تم حذف العنوان.')
         await loadAccount()
       }
     } catch (error) {
@@ -445,6 +449,7 @@ if (address.address_line.trim().length < 10) {
     try {
       const { error } = await supabase.auth.signOut()
       if (error) throw error
+      notify('تم تسجيل الخروج بنجاح.')
       setLogoutConfirm(false)
     } catch (error) {
       setSigningOut(false)
@@ -840,6 +845,7 @@ export function OrdersPage() {
 // ==============================
 
 export function FavoritesPage() {
+  const notify = useToast()
   const [products, setProducts] = useState<
     {
       id: string
@@ -892,6 +898,7 @@ export function FavoritesPage() {
       setError(`تعذر حذف المنتج: ${resultError.message}`)
     } else {
       setProducts((current) => current.filter((product) => product.id !== productId))
+      notify('تمت إزالة المنتج من المفضلة.')
     }
     setRemovingId(null)
   }
@@ -956,6 +963,7 @@ export function FavoritesPage() {
 // ==============================
 
 export function AuthPage() {
+  const notify = useToast()
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -1148,6 +1156,20 @@ if (currentMode === 'signup') {
 
       // نجاح تسجيل الدخول أو إنشاء الحساب
       if (result.data.session) {
+        if (currentMode === 'login') {
+          const metadataName = result.data.user?.user_metadata.full_name
+          const firstName =
+            typeof metadataName === 'string'
+              ? metadataName.trim().split(/\s+/)[0]
+              : ''
+          notify(
+            firstName
+              ? `تم تسجيل الدخول بنجاح، مرحبًا بعودتكِ يا ${firstName}.`
+              : 'تم تسجيل الدخول بنجاح، مرحبًا بعودتكِ.',
+          )
+        } else {
+          notify('تم إنشاء حسابكِ بنجاح، أهلًا بكِ في الحلم.')
+        }
         const returnState = location.state as {
           from?: string
           stockAlertVariantId?: string
@@ -1391,6 +1413,7 @@ setConfirm('')
 // ==============================
 
 export function ResetPasswordPage() {
+  const notify = useToast()
   const [password, setPassword] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
@@ -1420,7 +1443,7 @@ export function ResetPasswordPage() {
       if (error) {
         setMessage(`تعذر تحديث كلمة المرور: ${error.message}`)
       } else {
-        setMessage('تم تحديث كلمة المرور بنجاح.')
+        notify('تم تحديث كلمة المرور بنجاح.')
         navigate('/account')
       }
     } catch {

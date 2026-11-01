@@ -15,7 +15,7 @@ import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { readCart, writeCart } from "../lib/cart";
 import type { Product } from "../types";
 import { categoryFallback, money } from "../components/Storefront";
-import { EmptyState, ToastMessage } from "../components/Common";
+import { EmptyState, ToastMessage, useToast } from "../components/Common";
 import {
   categoryPromotions,
   promotionPercent,
@@ -296,6 +296,7 @@ export function CartPage() {
   is_default: boolean
 }
 export function CheckoutPage() {
+  const notify = useToast();
 
 const [saved, setSaved] = useState<SavedAddress[]>([])
 const [selectedAddress, setSelectedAddress] = useState('')
@@ -522,6 +523,7 @@ if (!check.ok) { setMessage('راجعي الحقول المميزة وصحّحي
     }
     writeCart([]);
     setBusy(false);
+    notify(`تم تأكيد طلبك رقم ${orderId} بنجاح.`);
     navigate(`/orders/${orderId}`);
   };
 
