@@ -383,11 +383,12 @@ img { display: block; max-width: 100%; }
 .admin-confirm-dialog > p b { color: var(--ink); font-weight: 500; }
 .admin-confirm-actions { display: flex; justify-content: center; gap: 9px; margin-top: 23px; }
 .admin-confirm-actions button { min-height: 41px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 17px; border: 1px solid var(--line); cursor: pointer; font: inherit; font-size: 10px; transition: background .2s, color .2s, border-color .2s, transform .2s; }
-.admin-confirm-actions button:hover { transform: translateY(-1px); }
+.admin-confirm-actions button:hover:not(:disabled) { transform: translateY(-1px); }
 .admin-confirm-cancel { background: var(--surface); color: var(--ink); }
 .admin-confirm-cancel:hover { border-color: var(--gold); color: var(--gold); }
 .admin-confirm-delete { border-color: #a44839 !important; background: #a44839; color: #fff; }
 .admin-confirm-delete:hover { background: #883b2e; }
+.admin-confirm-actions button:disabled { opacity: .6; cursor: wait; }
 @keyframes admin-confirm-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes admin-confirm-pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .category-page { margin-top: 35px; }
@@ -490,19 +491,6 @@ img { display: block; max-width: 100%; }
 .account-signout { min-width: 155px; justify-content: center; border-color: color-mix(in srgb, #a44839 34%, var(--line)); color: #a44839; cursor: pointer; font: inherit; font-size: 10px; }
 .account-orders-link:hover { transform: translateY(-2px); border-color: var(--gold); background: color-mix(in srgb, var(--gold) 5%, var(--surface)); }
 .account-signout:hover { transform: translateY(-2px); border-color: #a44839; background: rgb(164 72 57 / 7%); }
-.account-confirm-backdrop { position: fixed; z-index: 90; inset: 0; display: grid; place-items: center; padding: 20px; background: rgb(18 17 15 / 58%); backdrop-filter: blur(5px); animation: admin-confirm-fade .18s ease both; }
-.account-confirm-dialog { width: min(100%, 430px); padding: 30px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: center; box-shadow: 0 24px 80px rgb(0 0 0 / 24%); animation: admin-confirm-pop .22s cubic-bezier(.2,.7,.25,1) both; }
-.account-confirm-icon { width: 58px; height: 58px; display: grid; place-items: center; margin: 0 auto 17px; border: 1px solid color-mix(in srgb, var(--gold) 35%, var(--line)); border-radius: 50%; background: color-mix(in srgb, var(--gold) 10%, var(--surface)); color: var(--gold); }
-.account-confirm-icon-delete { border-color: color-mix(in srgb, #a44839 35%, var(--line)); background: color-mix(in srgb, #a44839 10%, var(--surface)); color: #a44839; }
-.account-confirm-dialog .eyebrow { margin-bottom: 7px; }
-.account-confirm-dialog h2 { margin: 0 0 10px; font-family: var(--serif); font-size: 25px; font-weight: 400; }
-.account-confirm-dialog > p:not(.eyebrow) { margin: 0; color: var(--muted); font-size: 10px; line-height: 2; }
-.account-confirm-actions { display: flex; justify-content: center; gap: 9px; margin-top: 23px; }
-.account-confirm-actions button { min-height: 41px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 15px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; font-size: 9px; transition: background .2s, color .2s, border-color .2s; }
-.account-confirm-actions button:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
-.account-confirm-actions button:disabled { opacity: .6; cursor: wait; }
-.account-confirm-actions .account-confirm-logout { border-color: #a44839; background: #a44839; color: #fff; }
-.account-confirm-actions .account-confirm-logout:hover:not(:disabled) { border-color: #883b2e; background: #883b2e; color: #fff; }
 .address-map-link { width: fit-content; display: inline-flex; align-items: center; gap: 7px; margin-top: 5px; color: var(--gold); font-size: 9px; }
 .address-map-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 .address-form label:has(input[type="url"]) { grid-column: 1 / -1; }
@@ -1267,9 +1255,6 @@ body.image-viewer-open { overflow: hidden; }
   .account-actions { align-items: flex-start; flex-direction: column; gap: 14px; }
   .account-orders-link { width: 100%; min-width: 0; }
   .account-signout { width: 100%; min-height: 46px; }
-  .account-confirm-dialog { padding: 24px 18px; }
-  .account-confirm-actions { flex-direction: column-reverse; gap: 8px; }
-  .account-confirm-actions button { width: 100%; }
   .address-list, .account-actions, .order-items { grid-column: auto; }
   .account-form, .settings-form, .product-admin-form { grid-template-columns: 1fr; }
   .promotion-form { grid-template-columns: 1fr; }

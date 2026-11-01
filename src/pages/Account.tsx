@@ -709,17 +709,17 @@ if (address.address_line.trim().length < 10) {
             {message && <ToastMessage message={message} />}
           </div>
         </div>
-        {(logoutConfirm || addressToDelete) && <div className="account-confirm-backdrop" onMouseDown={(event) => {
+        {(logoutConfirm || addressToDelete) && <div className="admin-confirm-backdrop" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !signingOut && !deletingAddress) {
             setLogoutConfirm(false)
             setAddressToDelete(null)
           }
         }}>
-          <section className="account-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="account-confirm-title" aria-describedby="account-confirm-description">
-            <span className={`account-confirm-icon${addressToDelete ? ' account-confirm-icon-delete' : ''}`}>
-              {addressToDelete ? <Trash2 size={21} /> : <LogOut size={21} />}
+          <section className="admin-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="account-confirm-title" aria-describedby="account-confirm-description">
+            <span className="admin-confirm-icon">
+              {addressToDelete ? <Trash2 size={22} /> : <LogOut size={22} />}
             </span>
-            <p className="eyebrow">مساحتك في الحلم</p>
+            <p className="eyebrow">{addressToDelete ? 'تأكيد الحذف' : 'تأكيد تسجيل الخروج'}</p>
             <h2 id="account-confirm-title">
               {addressToDelete ? 'هل تريدين حذف هذا العنوان؟' : 'هل تريدين تسجيل الخروج؟'}
             </h2>
@@ -728,12 +728,12 @@ if (address.address_line.trim().length < 10) {
                 ? <>سيتم حذف عنوان <b>{addressToDelete.recipient_name}</b> نهائيًا من عناوين التوصيل المحفوظة.</>
                 : 'يمكنكِ العودة إلى حسابكِ في أي وقت لمتابعة طلباتكِ ومفضّلتكِ.'}
             </p>
-            <div className="account-confirm-actions">
-              <button ref={confirmCancelRef} type="button" disabled={signingOut || deletingAddress} onClick={() => {
+            <div className="admin-confirm-actions">
+              <button ref={confirmCancelRef} className="admin-confirm-cancel" type="button" disabled={signingOut || deletingAddress} onClick={() => {
                 setLogoutConfirm(false)
                 setAddressToDelete(null)
-              }}>{addressToDelete ? 'الاحتفاظ بالعنوان' : 'البقاء في حسابي'}</button>
-              <button type="button" className="account-confirm-logout" disabled={signingOut || deletingAddress} onClick={() => {
+              }}>تراجُع</button>
+              <button type="button" className="admin-confirm-delete" disabled={signingOut || deletingAddress} onClick={() => {
                 if (addressToDelete) void removeAddress()
                 else void signOut()
               }}>
@@ -743,8 +743,8 @@ if (address.address_line.trim().length < 10) {
                   : signingOut
                     ? 'جارٍ تسجيل الخروج…'
                     : addressToDelete
-                      ? 'نعم، احذفي العنوان'
-                      : 'نعم، تسجيل الخروج'}
+                      ? 'نعم، احذف'
+                      : 'نعم، سجّلي الخروج'}
               </button>
             </div>
           </section>
