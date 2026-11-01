@@ -7,7 +7,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { orderStatusLabels, type OrderStatus } from '../types'
 import { EmptyState, ToastMessage, useToast } from '../components/Common'
 import { money, categoryFallback } from '../components/Storefront'
-import { promotionPercent, promotionPrice } from '../lib/promotions'
+import { promotionPercent, promotionPrice, type PromotionSchedule, usePromotionClock } from '../lib/promotions'
 import { GOVERNORATES } from '../lib/governorates'
 import { validateSignup } from '../lib/validation'
 type Address = {
@@ -847,6 +847,7 @@ export function OrdersPage() {
 
 export function FavoritesPage() {
   const notify = useToast()
+  const promotionNow = usePromotionClock()
   const [products, setProducts] = useState<
     {
       id: string
@@ -854,7 +855,7 @@ export function FavoritesPage() {
       slug: string
       price: number
       images: { image_url: string }[]
-      category: { promotions: { discount_percent: number }[] | null }[] | null
+      category: { promotions: PromotionSchedule[] | null }[] | null
     }[]
   >([])
 
@@ -871,7 +872,7 @@ export function FavoritesPage() {
     const { data, error: resultError } = await supabase
       .from('favorites')
       .select(
-        'product:products(id,name,slug,price,category:categories(promotions(discount_percent)),images:product_images(image_url,position))'
+        'product:products(id,name,slug,price,category:categories(promotions(discount_percent,starts_at,ends_at,is_active)),images:product_images(image_url,position))'
       )
 
     if (resultError) {
@@ -932,10 +933,10 @@ export function FavoritesPage() {
                     <small className="favorite-kicker"><Heart size={12} fill="currentColor" /> محفوظة في المفضلة</small>
                     <b>{product.name}</b>
                     <span className="favorite-price">
-                      <strong>{money(promotionPrice(product.price, product.category?.[0]?.promotions))}</strong>
-                      {promotionPercent(product.category?.[0]?.promotions) > 0 && <del>{money(product.price)}</del>}
+                      <strong>{money(promotionPrice(product.price, product.category?.[0]?.promotions, promotionNow))}</strong>
+                      {promotionPercent(product.category?.[0]?.promotions, promotionNow) > 0 && <del>{money(product.price)}</del>}
                     </span>
-                    {promotionPercent(product.category?.[0]?.promotions) > 0 && <span className="favorite-discount">خصم {promotionPercent(product.category?.[0]?.promotions)}%</span>}
+                    {promotionPercent(product.category?.[0]?.promotions, promotionNow) > 0 && <span className="favorite-discount">خصم {promotionPercent(product.category?.[0]?.promotions, promotionNow)}%</span>}
                     <span className="favorite-view">عرض التفاصيل <ArrowLeft size={14} /></span>
                   </span>
                 </Link>

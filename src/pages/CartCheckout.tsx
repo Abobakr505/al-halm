@@ -20,6 +20,8 @@ import {
   categoryPromotions,
   promotionPercent,
   promotionPrice,
+  usePromotionClock,
+  type PromotionSchedule,
 } from "../lib/promotions";
 import { GOVERNORATES } from "../lib/governorates";
 type CartProduct = Pick<
@@ -41,6 +43,7 @@ type CartItem = {
 };
 
 export function CartPage() {
+  const promotionNow = usePromotionClock();
   const [lines, setLines] = useState(readCart);
   const [items, setItems] = useState<CartItem[]>([]);
   const [error, setError] = useState("");
@@ -62,7 +65,7 @@ export function CartPage() {
         const { data, error: resultError } = await supabase
           .from("product_variants")
           .select(
-            "id,size,color,stock,product:products(id,name,slug,price,category:categories(name,slug,description,promotions(id,title,description,discount_percent,image_url)),images:product_images(image_url,alt_text,position))",
+            "id,size,color,stock,product:products(id,name,slug,price,category:categories(name,slug,description,promotions(id,title,description,discount_percent,image_url,starts_at,ends_at,is_active)),images:product_images(image_url,alt_text,position))",
           )
           .in(
             "id",
@@ -125,7 +128,8 @@ export function CartPage() {
       total +
       promotionPrice(
         item.product.price,
-        categoryPromotions(item.product.category),
+        categoryPromotions(item.product.category, promotionNow),
+        promotionNow,
       ) *
         item.quantity,
     0,
@@ -136,7 +140,8 @@ export function CartPage() {
       (item.product.price -
         promotionPrice(
           item.product.price,
-          categoryPromotions(item.product.category),
+          categoryPromotions(item.product.category, promotionNow),
+          promotionNow,
         )) *
         item.quantity,
     0,
@@ -297,6 +302,7 @@ export function CartPage() {
 }
 export function CheckoutPage() {
   const notify = useToast();
+  const promotionNow = usePromotionClock();
 
 const [saved, setSaved] = useState<SavedAddress[]>([])
 const [selectedAddress, setSelectedAddress] = useState('')
@@ -316,8 +322,9 @@ const [selectedAddress, setSelectedAddress] = useState('')
     delivery_fee: number;
     transfer_details: string;
   } | null>(null);
-  const [subtotal, setSubtotal] = useState(0);
-  const [discountTotal, setDiscountTotal] = useState(0);
+  const [pricingLines, setPricingLines] = useState<
+    { price: number; quantity: number; promotions: PromotionSchedule[] }[]
+  >([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
@@ -374,7 +381,7 @@ useEffect(() => {
     supabase
       .from("product_variants")
       .select(
-        "id,product:products(price,category:categories(name,slug,description,promotions(id,title,description,discount_percent,image_url)))",
+        "id,product:products(price,category:categories(name,slug,description,promotions(id,title,description,discount_percent,image_url,starts_at,ends_at,is_active)))",
       )
       .in(
         "id",
@@ -383,25 +390,35 @@ useEffect(() => {
       .then(({ data, error }) => {
         if (error) setMessage(`تعذر تحميل ملخص الطلب: ${error.message}`);
         else {
-          let regularSubtotal = 0;
-          let discountedSubtotal = 0;
-          for (const item of data ?? []) {
+          setPricingLines((data ?? []).flatMap((item) => {
             const product = Array.isArray(item.product)
               ? item.product[0]
               : item.product;
             const quantity =
               cart.find((line) => line.variantId === item.id)?.quantity || 0;
-            const price = Number(product?.price || 0);
-            regularSubtotal += price * quantity;
-            discountedSubtotal +=
-              promotionPrice(price, categoryPromotions(product?.category)) *
-              quantity;
-          }
-          setSubtotal(discountedSubtotal);
-          setDiscountTotal(regularSubtotal - discountedSubtotal);
+            return product && quantity
+              ? [{
+                  price: Number(product.price || 0),
+                  quantity,
+                  promotions: categoryPromotions(product.category, promotionNow),
+                }]
+              : [];
+          }));
         }
       });
 }, []);
+
+  const subtotal = pricingLines.reduce(
+    (total, line) =>
+      total +
+      promotionPrice(line.price, line.promotions, promotionNow) * line.quantity,
+    0,
+  );
+  const regularSubtotal = pricingLines.reduce(
+    (total, line) => total + line.price * line.quantity,
+    0,
+  );
+  const discountTotal = regularSubtotal - subtotal;
 
   if (!isSupabaseConfigured)
     return (

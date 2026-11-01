@@ -38,9 +38,11 @@ import { addCartVariant } from "../lib/cart";
 import type { Category, Product } from "../types";
 import {
   categoryPromotions,
+  isPromotionActive,
   promotionPercent,
   promotionPrice,
   type Promotion,
+  usePromotionClock,
 } from "../lib/promotions";
 import { EmptyState, InfoPage,TikTokIcon , useToast } from "./Common";
 
@@ -111,6 +113,7 @@ function SectionHeading({
 }
 
 export function HomePage() {
+  const promotionNow = usePromotionClock();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
 const [socialLinks, setSocialLinks] = useState<{
@@ -134,7 +137,7 @@ const [socialLinks, setSocialLinks] = useState<{
       supabase
         .from("products")
         .select(
-          "*, category:categories(name,slug,description,promotions(id,title,description,discount_percent,image_url)), images:product_images(image_url,alt_text,position), variants:product_variants(id,size,color,stock)",
+          "*, category:categories(name,slug,description,promotions(id,title,description,discount_percent,image_url,starts_at,ends_at,is_active)), images:product_images(image_url,alt_text,position), variants:product_variants(id,size,color,stock)",
         )
         .eq("is_active", true)
         .order("is_featured", { ascending: false })
@@ -147,7 +150,7 @@ const [socialLinks, setSocialLinks] = useState<{
         .order("position"),
       supabase
         .from("promotions")
-        .select("id,title,description,discount_percent,image_url,category_id")
+        .select("id,title,description,discount_percent,image_url,category_id,starts_at,ends_at,is_active")
         .eq("is_active", true)
         .lte("starts_at", new Date().toISOString())
         .or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`)
@@ -279,7 +282,7 @@ const [socialLinks, setSocialLinks] = useState<{
           />
           {promotions.length > 0 ? (
             <div className="promotion-grid">
-              {promotions.map((promotion) => {
+              {promotions.filter((promotion) => isPromotionActive(promotion, promotionNow)).map((promotion) => {
                 const category = categories.find(
                   (item) => item.id === promotion.category_id,
                 );
@@ -415,6 +418,7 @@ const [socialLinks, setSocialLinks] = useState<{
 }
 
 export function ProductsPage() {
+  const promotionNow = usePromotionClock();
   const [searchParams] = useSearchParams();
   const categorySlug = searchParams.get("category")?.trim() || "";
   const [products, setProducts] = useState<Product[]>([]);
@@ -445,7 +449,7 @@ export function ProductsPage() {
       const productRequest = client
         .from("products")
         .select(
-          "*, category:categories(name,slug,description,promotions(id,title,description,discount_percent,image_url)), images:product_images(image_url,alt_text,position), variants:product_variants(id,size,color,stock)",
+          "*, category:categories(name,slug,description,promotions(id,title,description,discount_percent,image_url,starts_at,ends_at,is_active)), images:product_images(image_url,alt_text,position), variants:product_variants(id,size,color,stock)",
         )
         .eq("is_active", true)
         .order("created_at", { ascending: false });
@@ -512,13 +516,13 @@ export function ProductsPage() {
           normalizeFilterValue(product.fabric || "") ===
             normalizeFilterValue(fabric)) &&
         (!minPrice ||
-          promotionPrice(product.price, categoryPromotions(product.category)) >=
+          promotionPrice(product.price, categoryPromotions(product.category, promotionNow), promotionNow) >=
             Number(minPrice)) &&
         (!maxPrice ||
-          promotionPrice(product.price, categoryPromotions(product.category)) <=
+          promotionPrice(product.price, categoryPromotions(product.category, promotionNow), promotionNow) <=
             Number(maxPrice)) &&
         (!discounted ||
-          promotionPercent(categoryPromotions(product.category)) > 0 ||
+          promotionPercent(categoryPromotions(product.category, promotionNow), promotionNow) > 0 ||
           Boolean(
             product.compare_at_price &&
             product.compare_at_price > product.price,
@@ -541,11 +545,11 @@ export function ProductsPage() {
     )
     .sort((a, b) =>
       sort === "price-asc"
-        ? promotionPrice(a.price, categoryPromotions(a.category)) -
-          promotionPrice(b.price, categoryPromotions(b.category))
+        ? promotionPrice(a.price, categoryPromotions(a.category, promotionNow), promotionNow) -
+          promotionPrice(b.price, categoryPromotions(b.category, promotionNow), promotionNow)
         : sort === "price-desc"
-          ? promotionPrice(b.price, categoryPromotions(b.category)) -
-            promotionPrice(a.price, categoryPromotions(a.category))
+          ? promotionPrice(b.price, categoryPromotions(b.category, promotionNow), promotionNow) -
+            promotionPrice(a.price, categoryPromotions(a.category, promotionNow), promotionNow)
           : 0,
     );
   const activeFilterCount = [
@@ -883,6 +887,7 @@ function FavoriteButton({ productId }: { productId: string }) {
 }
 
 export function ProductDetailsPage() {
+  const promotionNow = usePromotionClock();
   const { slug } = useParams();
   const notify = useToast();
   const [product, setProduct] = useState<Product | null>(null);
@@ -936,7 +941,7 @@ export function ProductDetailsPage() {
         },
       },
     });
-  }, [product]);
+  }, [product, promotionNow]);
 
   useEffect(() => {
     if (!supabase || !slug) return;
@@ -951,7 +956,7 @@ export function ProductDetailsPage() {
         const { data, error: resultError } = await supabase
           .from("products")
           .select(
-            "*, category:categories(name,slug,description,promotions(id,title,description,discount_percent,image_url)), images:product_images(id,image_url,alt_text,position), variants:product_variants(id,size,color,stock)",
+            "*, category:categories(name,slug,description,promotions(id,title,description,discount_percent,image_url,starts_at,ends_at,is_active)), images:product_images(id,image_url,alt_text,position), variants:product_variants(id,size,color,stock)",
           )
           .eq("slug", slug)
           .eq("is_active", true)
