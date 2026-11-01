@@ -43,7 +43,7 @@ export default function SizeGuidePage() {
         <div className="size-guide-copy">
           <p className="eyebrow"><Sparkles size={14} /> دليلك لإطلالة تليق بكِ</p>
           <h1>اعرفي <em>مقاسك</em></h1>
-          <p>خطوتان بسيطتان تساعدانكِ على اختيار طول العباية والقَصّة الأقرب لراحتك.</p>
+          <p>خطوتان بسيطتان تساعدانكِ على اختيار طول العباية والعباية الأقرب لراحتك.</p>
           <div className="size-guide-promise"><ShieldCheck size={17} /> قياساتكِ لا تُحفظ أو تُشارك</div>
         </div>
         <div className="size-guide-mark" aria-hidden="true">
@@ -132,7 +132,7 @@ export default function SizeGuidePage() {
 
       <section className="size-guide-notes">
         <div><span className="size-guide-note-number">١</span><p><b>الطول يحدد طول العباية</b><br />التوصية مبنية على مقاسات الطول الشائعة للعبايات.</p></div>
-        <div><span className="size-guide-note-number">٢</span><p><b>الوزن يساعد في اختيار القَصّة</b><br />اختاري القَصّة التي تمنحكِ الراحة، فالموديلات تختلف في اتساعها.</p></div>
+        <div><span className="size-guide-note-number">٢</span><p><b>الوزن يساعد في اختيار العباية</b><br />اختاري العباية التي تمنحكِ الراحة، فالموديلات تختلف في اتساعها.</p></div>
         <p className="size-guide-disclaimer">هذه التوصية استرشادية؛ تختلف المقاسات من تصميم لآخر. للحصول على أدق اختيار، راجعي قياسات العباية أو تواصلي معنا.</p>
       </section>
     </main>
