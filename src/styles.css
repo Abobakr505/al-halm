@@ -1002,7 +1002,7 @@ body.image-viewer-open { overflow: hidden; }
   .mobile-menu { display: inline-grid; order: 0; width: 40px; height: 40px;margin-left: 10px; border-radius: 12px; background: var(--soft); transition: background .2s, color .2s, transform .2s; }
   .mobile-menu:hover { color: var(--gold); background: var(--soft); transform: translateY(-1px); }
   .brand { order: 1; margin-left: auto; }
-  .header-actions { order: 2; gap: 1px; }
+  .header-actions { order: 2; gap: 2px; }
   .header-actions .icon-button { width: 31px; height: 31px; }
   .account-link { display: inline-grid; }
   .brand-mark { width: 34px; height: 34px; font-size: 21px; }
