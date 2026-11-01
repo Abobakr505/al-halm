@@ -209,7 +209,14 @@ export function SiteHeader() {
       <div className="announcement">
         تفاصيل صغيرة، أناقة تدوم <span>✦</span> شحن لجميع مناطق مصر
       </div>
-      <header className="site-header">
+      <header
+        className="site-header"
+        style={
+          menuOpen
+            ? { backdropFilter: "none", WebkitBackdropFilter: "none" }
+            : undefined
+        }
+      >
         <button
           className="icon-button mobile-menu"
           aria-label={menuOpen ? "إغلاق القائمة" : "فتح القائمة"}
