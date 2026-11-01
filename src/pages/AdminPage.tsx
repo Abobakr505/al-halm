@@ -11,6 +11,7 @@ import {
   type Product,
 } from "../types";
 import { GOVERNORATES } from "../lib/governorates";
+import { ABAYA_SIZE_OPTIONS, hasFractionalSize } from "../lib/sizes";
 const ORDER_STATUSES = Object.entries(orderStatusLabels) as [
   OrderStatus,
   string,
@@ -675,6 +676,10 @@ function ProductManagement() {
 
   const addSize = () => {
     const size = newSize.trim();
+    if (hasFractionalSize(size)) {
+      setMessage("المقاس يجب أن يكون رقمًا صحيحًا دون كسور، مثل 58 أو 58, 60 L.");
+      return;
+    }
     if (!size || sizes.includes(size)) return;
     const nextColors = colors.length ? colors : ["أسود"];
     setVariants((current) => [
@@ -682,6 +687,18 @@ function ProductManagement() {
       ...nextColors.map((color) => ({ size, color, stock: "0" })),
     ]);
     setNewSize("");
+  };
+
+  const addStandardSizes = () => {
+    const missingSizes = ABAYA_SIZE_OPTIONS.map((size) => size.value).filter((size) => !sizes.includes(size));
+    if (!missingSizes.length) return;
+    const nextColors = colors.length ? colors : ["أسود"];
+    setVariants((current) => [
+      ...current,
+      ...missingSizes.flatMap((size) =>
+        nextColors.map((color) => ({ size, color, stock: "0" })),
+      ),
+    ]);
   };
 
   const addColor = () => {
@@ -710,6 +727,10 @@ function ProductManagement() {
     const usableVariants = variants.filter(
       (item) => item.size.trim() && item.color.trim(),
     );
+    if (usableVariants.some((item) => hasFractionalSize(item.size))) {
+      setMessage("احذفي المقاسات التي تحتوي على كسور وأضيفي مقاسًا صحيحًا بدلًا منها.");
+      return;
+    }
     if (!usableVariants.length) {
       setMessage("أضيفي خيار مقاس ولون واحدًا على الأقل.");
       return;
@@ -1125,9 +1146,12 @@ for (const [index, image] of images.entries()) {
                   {!sizes.length && <span className="variant-empty">لم تتم إضافة مقاسات بعد.</span>}
                 </div>
                 <div className="variant-option-add">
-                  <input aria-label="مقاس جديد" placeholder="مثال: 56" value={newSize} onChange={(event) => setNewSize(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSize(); } }} />
+                  <input aria-label="مقاس جديد" placeholder="مثال: 64, 66 / XXXL" value={newSize} onChange={(event) => setNewSize(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSize(); } }} />
                   <button type="button" className="button button-outline" onClick={addSize} disabled={!newSize.trim() || sizes.includes(newSize.trim())}><Plus size={15} /> إضافة مقاس</button>
                 </div>
+                <button type="button" className="button button-outline variant-standard-sizes" onClick={addStandardSizes} disabled={ABAYA_SIZE_OPTIONS.every((size) => sizes.includes(size.value))}>
+                  <Plus size={15} /> إضافة المقاسات المعتمدة
+                </button>
               </section>
               <section className="variant-option-section">
                 <div className="variant-option-title"><b>الألوان</b><small>{colors.length} لون</small></div>

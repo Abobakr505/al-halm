@@ -1,26 +1,19 @@
 import { useState } from 'react'
 import { ArrowLeft, Check, Ruler, ShieldCheck, Sparkles, Weight } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { ABAYA_SIZE_OPTIONS, getAbayaSizeByBmi } from '../lib/sizes'
 
 type SizeRecommendation = {
-  size: number
+  size: ReturnType<typeof getAbayaSizeByBmi>
   fitNote: string
 }
 
 function getRecommendation(height: number, weight: number): SizeRecommendation {
-  const size = height < 150 ? 50
-    : height < 155 ? 52
-      : height < 160 ? 54
-        : height < 165 ? 56
-          : height < 170 ? 58
-            : 60
   const bmi = weight / ((height / 100) ** 2)
 
   return {
-    size,
-    fitNote: bmi >= 27
-      ? 'لراحة أكبر، اختاري قصة واسعة أو راجعي قياسات الصدر والورك في وصف العباية.'
-      : 'هذا المقاس مناسب كبداية للقصة العادية؛ راجعي قياسات القطعة إذا كنتِ تفضلين اتساعًا أكبر.',
+    size: getAbayaSizeByBmi(bmi),
+    fitNote: 'هذه توصية أولية مبنية على الطول والوزن. اختاري رقم طول العباية الأنسب لكِ، وراجعي وصف المنتج لاختلاف القصّات.',
   }
 }
 
@@ -43,7 +36,7 @@ export default function SizeGuidePage() {
         <div className="size-guide-copy">
           <p className="eyebrow"><Sparkles size={14} /> دليلك لإطلالة تليق بكِ</p>
           <h1>اعرفي <em>مقاسك</em></h1>
-          <p>خطوتان بسيطتان تساعدانكِ على اختيار طول العباية والعباية الأقرب لراحتك.</p>
+          <p>أدخلي طولكِ ووزنكِ لتحصلي على اقتراح مبدئي. يتكوّن المقاس من رقمين لطول العباية وحرف للتصنيف.</p>
           <div className="size-guide-promise"><ShieldCheck size={17} /> قياساتكِ لا تُحفظ أو تُشارك</div>
         </div>
         <div className="size-guide-mark" aria-hidden="true">
@@ -58,7 +51,7 @@ export default function SizeGuidePage() {
             <span className="size-guide-step">١</span>
             <div>
               <h2>أدخلي قياساتكِ</h2>
-              <p>استخدمي القياسات بالسنتيمتر والكيلوجرام.</p>
+              <p>الطول بالسنتيمتر والوزن بالكيلوجرام؛ نستخدمهما لاقتراح مجموعة مقاس مناسبة.</p>
             </div>
           </div>
           <div className="size-guide-fields">
@@ -115,25 +108,46 @@ export default function SizeGuidePage() {
           {recommendation && submitted ? (
             <>
               <div className="size-guide-result-top"><span><Check size={15} /> توصيتنا لكِ</span><Sparkles size={18} /></div>
-              <p className="size-guide-result-label">مقاس طول العباية المقترح</p>
-              <div className="size-guide-size">{recommendation.size}<small>مقاس</small></div>
+              <p className="size-guide-result-label">مجموعتكِ المقترحة</p>
+              <div
+                className="size-guide-recommendation"
+                aria-label={`المقاس ${recommendation.size.lengths[0]}, ${recommendation.size.lengths[1]} / ${recommendation.size.label}`}
+              >
+                <span>{recommendation.size.lengths[0]}, {recommendation.size.lengths[1]}</span>
+                <span className="size-guide-recommendation-divider">/</span>
+                <strong>{recommendation.size.label}</strong>
+              </div>
+              <p className="size-guide-length-hint">اختاري الطول الأنسب لكِ من الرقمين.</p>
               <p className="size-guide-fit">{recommendation.fitNote}</p>
-              <Link className="size-guide-shop-link" to="/products">تصفحي العبايات <ArrowLeft size={15} /></Link>
+              <Link className="size-guide-shop-link !mt-4" to="/products">
+                <span>تصفحي العبايات</span><ArrowLeft size={16} />
+              </Link>
             </>
           ) : (
             <>
               <span className="size-guide-result-icon"><Ruler size={23} /></span>
               <h2>مقاسكِ المناسب<br />على بُعد خطوة</h2>
-              <p>أدخلي الطول والوزن لتظهر لكِ توصية أولية تساعدكِ في الاختيار.</p>
+              <p>أدخلي طولكِ ووزنكِ، وسنقترح مجموعة مقاس تساعدكِ على بدء الاختيار.</p>
             </>
           )}
         </div>
       </section>
 
       <section className="size-guide-notes">
-        <div><span className="size-guide-note-number">١</span><p><b>الطول يحدد طول العباية</b><br />التوصية مبنية على مقاسات الطول الشائعة للعبايات.</p></div>
-        <div><span className="size-guide-note-number">٢</span><p><b>الوزن يساعد في اختيار العباية</b><br />اختاري العباية التي تمنحكِ الراحة، فالموديلات تختلف في اتساعها.</p></div>
-        <p className="size-guide-disclaimer">هذه التوصية استرشادية؛ تختلف المقاسات من تصميم لآخر. للحصول على أدق اختيار، راجعي قياسات العباية أو تواصلي معنا.</p>
+        <div><span className="size-guide-note-number">١</span><p><b>الرقمان لطول العباية</b><br />مثل 64 و66؛ اختاري الطول الأقرب لكِ ولطريقة ارتدائك.</p></div>
+        <div><span className="size-guide-note-number">٢</span><p><b>الحرف لتصنيف المقاس</b><br />يقدّره الدليل استرشاديًا من الطول والوزن، وقد تختلف الملاءمة حسب قصة كل تصميم.</p></div>
+        <div className="size-guide-size-chart-heading">
+          <b>دليل المقاسات</b>
+          <small>النطاقات تقريبية وتعتمد على مؤشر كتلة الجسم</small>
+        </div>
+        <div className="size-guide-size-chart" aria-label="المقاسات المتاحة">
+          {ABAYA_SIZE_OPTIONS.map((size) => (
+            <span key={size.value}>
+              <b>{size.value}</b>
+            </span>
+          ))}
+        </div>
+        <p className="size-guide-disclaimer">الاقتراح استرشادي وليس ضمانًا لملاءمة المقاس؛ تختلف قياسات القصّات من عباية لأخرى. راجعي تفاصيل المنتج أو تواصلي معنا إذا احتجتِ مساعدة.</p>
       </section>
     </main>
   )
