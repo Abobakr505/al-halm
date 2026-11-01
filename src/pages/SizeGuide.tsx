@@ -134,7 +134,7 @@ export default function SizeGuidePage() {
       </section>
 
       <section className="size-guide-notes">
-        <div><span className="size-guide-note-number">١</span><p><b>الرقمان لطول العباية</b><br />مثل 64 و66؛ اختاري الطول الأقرب لكِ ولطريقة ارتدائك.</p></div>
+        <div><span className="size-guide-note-number">١</span><p><b>الرقمان لطول العباية</b><br />مثل 63 و65؛ اختاري الطول الأقرب لكِ ولطريقة ارتدائك.</p></div>
         <div><span className="size-guide-note-number">٢</span><p><b>الحرف لتصنيف المقاس</b><br />يقدّره الدليل استرشاديًا من الطول والوزن، وقد تختلف الملاءمة حسب قصة كل تصميم.</p></div>
         <div className="size-guide-size-chart-heading">
           <b>دليل المقاسات</b>

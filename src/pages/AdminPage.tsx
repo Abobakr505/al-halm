@@ -677,7 +677,7 @@ function ProductManagement() {
   const addSize = () => {
     const size = newSize.trim();
     if (hasFractionalSize(size)) {
-      setMessage("المقاس يجب أن يكون رقمًا صحيحًا دون كسور، مثل 58 أو 58, 60 L.");
+      setMessage("المقاس يجب أن يكون رقمًا صحيحًا دون كسور، مثل 55 أو 55, 57 / L.");
       return;
     }
     if (!size || sizes.includes(size)) return;
@@ -1146,7 +1146,7 @@ for (const [index, image] of images.entries()) {
                   {!sizes.length && <span className="variant-empty">لم تتم إضافة مقاسات بعد.</span>}
                 </div>
                 <div className="variant-option-add">
-                  <input aria-label="مقاس جديد" placeholder="مثال: 64, 66 / XXXL" value={newSize} onChange={(event) => setNewSize(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSize(); } }} />
+                  <input aria-label="مقاس جديد" placeholder="مثال: 63, 65 / 3XL" value={newSize} onChange={(event) => setNewSize(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addSize(); } }} />
                   <button type="button" className="button button-outline" onClick={addSize} disabled={!newSize.trim() || sizes.includes(newSize.trim())}><Plus size={15} /> إضافة مقاس</button>
                 </div>
                 <button type="button" className="button button-outline variant-standard-sizes" onClick={addStandardSizes} disabled={ABAYA_SIZE_OPTIONS.every((size) => sizes.includes(size.value))}>

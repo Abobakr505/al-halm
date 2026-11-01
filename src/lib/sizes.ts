@@ -1,9 +1,9 @@
 export const ABAYA_SIZE_OPTIONS = [
-  { value: '58, 60 / L', label: 'L', lengths: [58, 60],  },
-  { value: '60, 62 / XL', label: 'XL', lengths: [60, 62]},
-  { value: '62, 64 / XXL', label: 'XXL', lengths: [62, 64],  },
-  { value: '64, 66 / XXXL', label: 'XXXL', lengths: [64, 66],  },
-  { value: '66, 69 / XXXXL', label: 'XXXXL', lengths: [66, 69], },
+  { value: '55, 57 / L', label: 'L', lengths: [55, 57] },
+  { value: '58, 60 / XL', label: 'XL', lengths: [58, 60] },
+  { value: '60, 62 / 2XL', label: '2XL', lengths: [60, 62] },
+  { value: '63, 65 / 3XL', label: '3XL', lengths: [63, 65] },
+  { value: '66, 69 / 4XL', label: '4XL', lengths: [66, 69] },
 ] as const
 
 export function hasFractionalSize(size: string): boolean {
