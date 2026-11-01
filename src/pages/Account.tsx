@@ -490,7 +490,7 @@ if (address.address_line.trim().length < 10) {
           <div className="account-latest-copy">
             <small>آخر طلب لكِ · #{accountOrders[0].order_number}</small>
             <b>{orderStatusLabels[accountOrders[0].status]}</b>
-            <span>{new Date(accountOrders[0].created_at).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })} · {money(Number(accountOrders[0].total))}</span>
+            <span>{new Date(accountOrders[0].created_at).toLocaleDateString('ar-EG', { calendar: 'gregory', day: 'numeric', month: 'long', year: 'numeric' })} · {money(Number(accountOrders[0].total))}</span>
           </div>
           <Link to={`/orders/${accountOrders[0].id}`}>تفاصيل الطلب <ArrowLeft size={15} /></Link>
         </section>}
@@ -821,7 +821,7 @@ export function OrdersPage() {
                 <span className={`order-row-icon order-tone-${statusTone}`}><PackageCheck size={21} /></span>
                 <div className="order-row-main">
                   <div className="order-row-title"><b>طلب رقم #{order.order_number}</b><span className={`status-pill status-${statusTone}`}>{orderStatusLabels[order.status]}</span></div>
-                  <small><CalendarDays size={13} /> {new Date(order.created_at).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })}</small>
+                  <small><CalendarDays size={13} /> {new Date(order.created_at).toLocaleDateString('ar-EG', { calendar: 'gregory', day: 'numeric', month: 'long', year: 'numeric' })}</small>
                 </div>
                 <div className="order-row-payment"><small>إجمالي الطلب</small><b>{money(Number(order.total))}</b><span>المدفوع مقدمًا {money(Number(order.deposit_amount))}</span></div>
                 <span className="order-row-arrow"><ArrowLeft size={17} /></span>
@@ -1708,7 +1708,7 @@ export function OrderDetailsPage() {
               </span>
 
               <small>
-                {new Date(order.created_at).toLocaleString('ar-SA')}
+                {new Date(order.created_at).toLocaleString('ar-SA', { calendar: 'gregory' })}
               </small>
             </div>
 
@@ -1728,7 +1728,7 @@ export function OrderDetailsPage() {
                         <b>{orderStatusLabels[item.status]}</b>
 
                         <small>
-                          {new Date(item.created_at).toLocaleString('ar-SA')}
+                          {new Date(item.created_at).toLocaleString('ar-SA', { calendar: 'gregory' })}
                           {item.note ? ` · ${item.note}` : ''}
                         </small>
                       </div>

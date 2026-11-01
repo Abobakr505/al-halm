@@ -545,7 +545,7 @@ function Dashboard() {
         <div className="dashboard-card-heading"><div><p className="eyebrow">أحدث النشاطات</p><h2>آخر الطلبات</h2></div><Link to="/admin/orders">عرض الكل <span>←</span></Link></div>
         {recentOrders.length ? <div className="dashboard-order-list">{recentOrders.map((order) => <Link className="dashboard-order-row" to={`/admin/orders/${order.id}`} key={order.id}>
           <b>طلب #{order.order_number}</b>
-          <span>{new Date(order.created_at).toLocaleDateString("ar-EG", { day: "numeric", month: "short", year: "numeric" })}</span>
+          <span>{new Date(order.created_at).toLocaleDateString("ar-EG", { calendar: "gregory", day: "numeric", month: "short", year: "numeric" })}</span>
           <span className={`dashboard-order-status status-${order.status}`}>{orderStatusLabels[order.status]}</span>
           <strong>{money(Number(order.total))}</strong>
         </Link>)}</div> : <p className="muted-copy">لا توجد طلبات حتى الآن.</p>}
@@ -1540,7 +1540,7 @@ function OrderManagement() {
                       "عميل"}
                   </td>
                   <td>
-                    {new Date(order.created_at).toLocaleDateString("ar-SA")}
+                    {new Date(order.created_at).toLocaleDateString("ar-SA", { calendar: "gregory" })}
                   </td>
                   <td>{money(order.total)}</td>
                   <td>{money(order.deposit_amount)}</td>
@@ -1734,7 +1734,7 @@ function AdminOrderDetails({ orderId }: { orderId: string }) {
         <p>
           {order.profiles?.full_name || "العميل"} ·{" "}
           {order.profiles?.phone || "لا يوجد هاتف مسجل"} ·{" "}
-          {new Date(order.created_at).toLocaleString("ar-SA")}
+          {new Date(order.created_at).toLocaleString("ar-SA", { calendar: "gregory" })}
         </p>
         <h3>العنوان</h3>
         <p>
@@ -2196,7 +2196,7 @@ function PromotionManagement() {
             <div className="promotion-admin-copy">
               <b>{promotion.title}</b>
               <span>{categories.find((category) => category.id === promotion.category_id)?.name || "قسم غير متاح"} · خصم {promotion.discount_percent}%</span>
-              <small>{promotion.is_active ? "مفعّل" : "متوقف"} · يبدأ {new Date(promotion.starts_at).toLocaleString("ar-EG")}{promotion.ends_at ? ` · ينتهي ${new Date(promotion.ends_at).toLocaleString("ar-EG")}` : ""}</small>
+              <small>{promotion.is_active ? "مفعّل" : "متوقف"} · يبدأ {new Date(promotion.starts_at).toLocaleString("ar-EG", { calendar: "gregory" })}{promotion.ends_at ? ` · ينتهي ${new Date(promotion.ends_at).toLocaleString("ar-EG", { calendar: "gregory" })}` : ""}</small>
             </div>
             <button type="button" onClick={() => edit(promotion)}>تعديل</button>
             <button type="button" onClick={() => void toggle(promotion)}>{promotion.is_active ? "إيقاف" : "تفعيل"}</button>

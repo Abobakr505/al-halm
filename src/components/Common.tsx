@@ -25,6 +25,7 @@ import {
   Search,
   ShoppingBag,
   Sun,
+  Ruler,
   UserRound,
   X,
 } from "lucide-react";
@@ -287,6 +288,16 @@ export function SiteHeader() {
             </span>
             <ArrowLeft className="mobile-nav-arrow" size={16} />
           </Link>
+          <Link to="/size-guide" onClick={closeMenu}>
+            <span className="mobile-nav-icon">
+              <Ruler size={18} />
+            </span>
+            <span className="mobile-nav-copy">
+              <b>اعرفي مقاسك</b>
+              <small>اختاري طول العباية المناسب</small>
+            </span>
+            <ArrowLeft className="mobile-nav-arrow" size={16} />
+          </Link>
           <Link to="/about" onClick={closeMenu}>
             <span className="mobile-nav-icon">
               <BookOpen size={18} />
@@ -439,6 +450,7 @@ export function SiteFooter() {
             <b>تصفحي</b>
             <Link to="/products">كل العبايات</Link>
             <Link to="/categories">الأقسام</Link>
+            <Link to="/size-guide">اعرفي مقاسك</Link>
             <Link to="/about">قصتنا</Link>
           </div>
           <div>

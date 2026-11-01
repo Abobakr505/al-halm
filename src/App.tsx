@@ -17,6 +17,7 @@ const OrderDetailsPage = lazy(() => import('./pages/Account').then((module) => (
 const FavoritesPage = lazy(() => import('./pages/Account').then((module) => ({ default: module.FavoritesPage })))
 const AdminPage = lazy(() => import('./pages/AdminPage'))
 const StoreInformation = lazy(() => import('./pages/StoreInformation'))
+const SizeGuidePage = lazy(() => import('./pages/SizeGuide'))
 
 function RouteMetadata() {
   const { pathname } = useLocation()
@@ -27,6 +28,7 @@ function RouteMetadata() {
       '/products': { title: 'تسوقي العبايات | متجر الحلم', description: 'اكتشفي مجموعة عبايات الحلم، واختاري التصميم والخامة واللون والمقاس المناسب لك.' },
       '/search': { title: 'البحث عن عباية | متجر الحلم', description: 'ابحثي وتصفحي العبايات المتاحة من متجر الحلم.' },
       '/categories': { title: 'أقسام العبايات | متجر الحلم', description: 'تصفحي أقسام عبايات متجر الحلم واختاري التصميم الذي يناسب ذوقك.' },
+      '/size-guide': { title: 'اعرفي مقاسك | متجر الحلم', description: 'أدخلي طولك ووزنك لتحصلي على توصية استرشادية لمقاس طول العباية والقصة المناسبة.' },
       '/about': { title: 'قصتنا | متجر الحلم', description: 'تعرفي على حكاية متجر الحلم وشغفنا بتصميم عبايات تجمع الأناقة والراحة.' },
       '/contact': { title: 'تواصلي معنا | متجر الحلم', description: 'تواصلي مع متجر الحلم للاستفسار عن العبايات والطلبات والتوصيل.' },
       '/policies': { title: 'سياسات المتجر | متجر الحلم', description: 'اطلعي على سياسات الخصوصية والاستبدال والاسترجاع لدى متجر الحلم.' },
@@ -56,6 +58,7 @@ export default function App() {
           <Route path="/search" element={<ProductsPage />} />
           <Route path="/products/:slug" element={<ProductDetailsPage />} />
           <Route path="/categories" element={<CategoriesPage />} />
+          <Route path="/size-guide" element={<SizeGuidePage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/login" element={<AuthPage />} />
