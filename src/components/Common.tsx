@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   BookOpen,
   CheckCircle2,
+  ExternalLink,
   Facebook,
   Heart,
   Home,
@@ -493,11 +494,12 @@ export function SiteFooter() {
           <span className="footer-credit">
             تطوير{" "}
             <a
+              className="footer-credit-link"
               href="https://bakrhasan.vercel.app/"
               target="_blank"
               rel="noopener noreferrer"
             >
-              ابوبكر حسن
+              ابوبكر حسن <ExternalLink size={11} />
             </a>{" "}
             <Heart size={13} />
           </span>

@@ -1,7 +1,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, BadgeCheck, CalendarDays, ExternalLink, Heart, LogOut, MapPin, PackageCheck, Sparkles, Trash2, Truck, Upload, UserRound } from 'lucide-react'
+import { ArrowLeft, BadgeCheck, BellRing, CalendarDays, ExternalLink, Heart, LogOut, MapPin, PackageCheck, Sparkles, Trash2, Truck, Upload, UserRound } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { orderStatusLabels, type OrderStatus } from '../types'
 import { EmptyState, ToastMessage } from '../components/Common'
@@ -30,6 +30,20 @@ type CustomerOrder = {
   deposit_amount: number
   remaining_amount: number
   created_at: string
+}
+
+type StockAlert = {
+  id: string
+  notified_at: string
+  variant: {
+    size: string
+    color: string
+    product: { name: string; slug: string } | { name: string; slug: string }[] | null
+  } | {
+    size: string
+    color: string
+    product: { name: string; slug: string } | { name: string; slug: string }[] | null
+  }[] | null
 }
 
 // ==============================
@@ -127,6 +141,7 @@ export function AccountPage() {
   })
 
   const [addresses, setAddresses] = useState<Address[]>([])
+  const [stockAlerts, setStockAlerts] = useState<StockAlert[]>([])
   const [accountOrders, setAccountOrders] = useState<CustomerOrder[]>([])
   const [accountLoading, setAccountLoading] = useState(true)
 const [zones, setZones] = useState<Record<string, number>>({})
@@ -145,22 +160,27 @@ const [zones, setZones] = useState<Record<string, number>>({})
   const [busy, setBusy] = useState(false)
   const [logoutConfirm, setLogoutConfirm] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
-  const logoutCancelRef = useRef<HTMLButtonElement>(null)
+  const [addressToDelete, setAddressToDelete] = useState<Address | null>(null)
+  const [deletingAddress, setDeletingAddress] = useState(false)
+  const confirmCancelRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
-    if (!logoutConfirm) return
+    if (!logoutConfirm && !addressToDelete) return
     const previousOverflow = document.body.style.overflow
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !signingOut) setLogoutConfirm(false)
+      if (event.key === 'Escape' && !signingOut && !deletingAddress) {
+        setLogoutConfirm(false)
+        setAddressToDelete(null)
+      }
     }
     document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', closeOnEscape)
-    logoutCancelRef.current?.focus()
+    confirmCancelRef.current?.focus()
     return () => {
       document.body.style.overflow = previousOverflow
       window.removeEventListener('keydown', closeOnEscape)
     }
-  }, [logoutConfirm, signingOut])
+  }, [logoutConfirm, addressToDelete, signingOut, deletingAddress])
 useEffect(() => {
   if (!supabase) return
   supabase
@@ -183,7 +203,7 @@ useEffect(() => {
       return
     }
 
-    const [profileResult, addressResult, ordersResult] = await Promise.all([
+    const [profileResult, addressResult, ordersResult, stockAlertsResult] = await Promise.all([
       supabase
         .from('profiles')
         .select('email,full_name,phone')
@@ -200,7 +220,12 @@ useEffect(() => {
         .from('orders')
         .select('id,order_number,status,payment_status,total,deposit_amount,remaining_amount,created_at')
         .eq('user_id', userData.user.id)
-        .order('created_at', { ascending: false })
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('stock_alerts')
+        .select('id,notified_at,variant:product_variants(size,color,product:products(name,slug))')
+        .not('notified_at', 'is', null)
+        .order('notified_at', { ascending: false })
     ])
 
     if (profileResult.error) {
@@ -219,7 +244,26 @@ useEffect(() => {
     } else {
       setAccountOrders(ordersResult.data ?? [])
     }
+    if (stockAlertsResult.error) {
+      setMessage(`تعذر تحميل تنبيهات المخزون: ${stockAlertsResult.error.message}`)
+    } else {
+      setStockAlerts((stockAlertsResult.data ?? []) as StockAlert[])
+    }
     setAccountLoading(false)
+  }
+
+  const dismissStockAlert = async (id: string) => {
+    if (!supabase) return
+    try {
+      const { error } = await supabase.from('stock_alerts').delete().eq('id', id)
+      if (error) {
+        setMessage(`تعذر إخفاء تنبيه المخزون: ${error.message}`)
+        return
+      }
+      setStockAlerts((current) => current.filter((alert) => alert.id !== id))
+    } catch (error) {
+      setMessage(`تعذر إخفاء تنبيه المخزون: ${error instanceof Error ? error.message : 'حدث خطأ غير معروف.'}`)
+    }
   }
 
   useEffect(() => {
@@ -369,20 +413,29 @@ if (address.address_line.trim().length < 10) {
     }
   }
 
-  const removeAddress = async (id: string) => {
+  const removeAddress = async () => {
     if (!supabase) return
+    if (!addressToDelete || deletingAddress) return
 
-    if (!window.confirm('هل تريدين حذف هذا العنوان؟')) return
+    setDeletingAddress(true)
+    try {
+      const { error } = await supabase
+        .from('addresses')
+        .delete()
+        .eq('id', addressToDelete.id)
 
-    const { error } = await supabase
-      .from('addresses')
-      .delete()
-      .eq('id', id)
-
-    if (error) {
-      setMessage(`تعذر حذف العنوان: ${error.message}`)
-    } else {
-      await loadAccount()
+      if (error) {
+        setMessage(`تعذر حذف العنوان: ${error.message}`)
+        setAddressToDelete(null)
+      } else {
+        setAddressToDelete(null)
+        await loadAccount()
+      }
+    } catch (error) {
+      setMessage(`تعذر حذف العنوان: ${error instanceof Error ? error.message : 'حدث خطأ غير معروف.'}`)
+      setAddressToDelete(null)
+    } finally {
+      setDeletingAddress(false)
     }
   }
 
@@ -435,6 +488,38 @@ if (address.address_line.trim().length < 10) {
           </div>
           <Link to={`/orders/${accountOrders[0].id}`}>تفاصيل الطلب <ArrowLeft size={15} /></Link>
         </section>}
+
+        {stockAlerts.length > 0 && (
+          <section className="stock-alert-notifications" aria-labelledby="stock-alert-title">
+            <div className="stock-alert-notifications-heading">
+              <span><BellRing size={18} /></span>
+              <div>
+                <h2 id="stock-alert-title">مقاسات عادت للمخزون</h2>
+                <p>القطع التي طلبتِ تنبيهكِ عند توفرها أصبحت متاحة الآن.</p>
+              </div>
+            </div>
+            <div className="stock-alert-notification-list">
+              {stockAlerts.map((alert) => {
+                const variant = Array.isArray(alert.variant) ? alert.variant[0] : alert.variant
+                const product = variant
+                  ? Array.isArray(variant.product) ? variant.product[0] : variant.product
+                  : null
+                return (
+                  <div className="stock-alert-notification" key={alert.id}>
+                  <div>
+                    <b>{product?.name || 'عباية'}</b>
+                    <span>{variant?.color} · مقاس {variant?.size} متوفر الآن</span>
+                  </div>
+                  {product?.slug && (
+                    <Link to={`/products/${product.slug}`}>تسوقيها <ArrowLeft size={14} /></Link>
+                  )}
+                  <button type="button" onClick={() => void dismissStockAlert(alert.id)}>إخفاء</button>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
 
         <div className="account-columns">
           <section className="admin-card">
@@ -599,7 +684,7 @@ if (address.address_line.trim().length < 10) {
                       تعديل
                     </button>
 
-                    <button onClick={() => void removeAddress(item.id)}>
+                    <button type="button" onClick={() => setAddressToDelete(item)}>
                       حذف
                     </button>
                   </div>
@@ -619,15 +704,43 @@ if (address.address_line.trim().length < 10) {
             {message && <ToastMessage message={message} />}
           </div>
         </div>
-        {logoutConfirm && <div className="account-confirm-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !signingOut) setLogoutConfirm(false) }}>
-          <section className="account-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="logout-confirm-title" aria-describedby="logout-confirm-description">
-            <span className="account-confirm-icon"><LogOut size={21} /></span>
+        {(logoutConfirm || addressToDelete) && <div className="account-confirm-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !signingOut && !deletingAddress) {
+            setLogoutConfirm(false)
+            setAddressToDelete(null)
+          }
+        }}>
+          <section className="account-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="account-confirm-title" aria-describedby="account-confirm-description">
+            <span className={`account-confirm-icon${addressToDelete ? ' account-confirm-icon-delete' : ''}`}>
+              {addressToDelete ? <Trash2 size={21} /> : <LogOut size={21} />}
+            </span>
             <p className="eyebrow">مساحتك في الحلم</p>
-            <h2 id="logout-confirm-title">هل تريدين تسجيل الخروج؟</h2>
-            <p id="logout-confirm-description">يمكنكِ العودة إلى حسابكِ في أي وقت لمتابعة طلباتكِ ومفضّلتكِ.</p>
+            <h2 id="account-confirm-title">
+              {addressToDelete ? 'هل تريدين حذف هذا العنوان؟' : 'هل تريدين تسجيل الخروج؟'}
+            </h2>
+            <p id="account-confirm-description">
+              {addressToDelete
+                ? <>سيتم حذف عنوان <b>{addressToDelete.recipient_name}</b> نهائيًا من عناوين التوصيل المحفوظة.</>
+                : 'يمكنكِ العودة إلى حسابكِ في أي وقت لمتابعة طلباتكِ ومفضّلتكِ.'}
+            </p>
             <div className="account-confirm-actions">
-              <button ref={logoutCancelRef} type="button" disabled={signingOut} onClick={() => setLogoutConfirm(false)}>البقاء في حسابي</button>
-              <button type="button" className="account-confirm-logout" disabled={signingOut} onClick={() => void signOut()}><LogOut size={15} />{signingOut ? 'جارٍ تسجيل الخروج…' : 'نعم، تسجيل الخروج'}</button>
+              <button ref={confirmCancelRef} type="button" disabled={signingOut || deletingAddress} onClick={() => {
+                setLogoutConfirm(false)
+                setAddressToDelete(null)
+              }}>{addressToDelete ? 'الاحتفاظ بالعنوان' : 'البقاء في حسابي'}</button>
+              <button type="button" className="account-confirm-logout" disabled={signingOut || deletingAddress} onClick={() => {
+                if (addressToDelete) void removeAddress()
+                else void signOut()
+              }}>
+                {addressToDelete ? <Trash2 size={15} /> : <LogOut size={15} />}
+                {deletingAddress
+                  ? 'جارٍ حذف العنوان…'
+                  : signingOut
+                    ? 'جارٍ تسجيل الخروج…'
+                    : addressToDelete
+                      ? 'نعم، احذفي العنوان'
+                      : 'نعم، تسجيل الخروج'}
+              </button>
             </div>
           </section>
         </div>}
@@ -1035,9 +1148,18 @@ if (currentMode === 'signup') {
 
       // نجاح تسجيل الدخول أو إنشاء الحساب
       if (result.data.session) {
+        const returnState = location.state as {
+          from?: string
+          stockAlertVariantId?: string
+        } | null
         navigate(
-          (location.state as { from?: string } | null)?.from || '/account',
-          { replace: true }
+          returnState?.from || '/account',
+          {
+            replace: true,
+            state: returnState?.stockAlertVariantId
+              ? { stockAlertVariantId: returnState.stockAlertVariantId }
+              : null,
+          }
         )
       } else {
         setMessage('تمت العملية بنجاح، لكن لم يتم إنشاء جلسة دخول.')

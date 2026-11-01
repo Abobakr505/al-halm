@@ -346,6 +346,8 @@ function Dashboard() {
   const [stats, setStats] = useState<{ label: string; value: string; note: string }[]>([]);
   const [statusCounts, setStatusCounts] = useState<{ status: OrderStatus; count: number }[]>([]);
   const [recentOrders, setRecentOrders] = useState<{ id: string; order_number: number; status: OrderStatus; total: number; created_at: string }[]>([]);
+  const [bestSellers, setBestSellers] = useState<{ product_id: string | null; product_name: string; quantity: number }[]>([]);
+  const [lowStock, setLowStock] = useState<{ id: string; product_id: string; product_name: string; size: string; color: string; stock: number }[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -358,6 +360,7 @@ function Dashboard() {
     const client = supabase;
     let active = true;
     const load = async () => {
+      try {
       setLoading(true);
       setError("");
       const monthStart = new Date();
@@ -379,16 +382,32 @@ function Dashboard() {
           if ((result.data ?? []).length < 1000) return { data: rows, error: null };
         }
       };
-      const [monthOrders, recent, allOrders, customers, products, variants, promotions] = await Promise.all([
+      const bestSellersPromise = async () => {
+        const rows: { product_id: string | null; product_name: string; quantity: number }[] = [];
+        for (let offset = 0; ; offset += 1000) {
+          const result = await client.from("order_items")
+            .select("product_id,product_name,quantity,orders!inner(status)")
+            .eq("orders.status", "delivered")
+            .order("id")
+            .range(offset, offset + 999);
+          if (result.error) return { data: null, error: result.error };
+          rows.push(...(result.data ?? []) as typeof rows);
+          if ((result.data ?? []).length < 1000) return { data: rows, error: null };
+        }
+      };
+      const [monthOrders, recent, allOrders, customers, products, variants, promotions, bestSellingItems, inventory] = await Promise.all([
         monthOrdersPromise(),
         client.from("orders").select("id,order_number,status,total,created_at").order("created_at", { ascending: false }).limit(8),
         client.from("orders").select("id", { count: "exact", head: true }),
         client.from("profiles").select("id", { count: "exact", head: true }),
         client.from("products").select("id", { count: "exact", head: true }).eq("is_active", true),
-        client.from("product_variants").select("id", { count: "exact", head: true }).gt("stock", 0).lte("stock", 3),
+        client.from("product_variants").select("id", { count: "exact", head: true }).lte("stock", 3),
         client.from("promotions").select("id", { count: "exact", head: true }).eq("is_active", true).lte("starts_at", new Date().toISOString()).or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`),
+        bestSellersPromise(),
+        client.from("product_variants").select("id,product_id,size,color,stock,product:products!inner(name,is_active)")
+          .eq("product.is_active", true).lte("stock", 3).order("stock", { ascending: true }).limit(8),
       ]);
-      const failed = [monthOrders, recent, allOrders, customers, products, variants, promotions].find((result) => result.error);
+      const failed = [monthOrders, recent, allOrders, customers, products, variants, promotions, bestSellingItems, inventory].find((result) => result.error);
       if (!active) return;
       if (failed?.error) {
         setError(`تعذر تحميل تقارير النظرة العامة: ${failed.error.message}`);
@@ -409,6 +428,16 @@ function Dashboard() {
         status,
         count: ordersThisMonth.filter((order) => order.status === status).length,
       })).filter((item) => item.count > 0);
+      const salesByProduct = new Map<string, { product_id: string | null; product_name: string; quantity: number }>();
+      for (const item of bestSellingItems.data ?? []) {
+        const key = item.product_id || item.product_name;
+        const current = salesByProduct.get(key);
+        salesByProduct.set(key, {
+          product_id: item.product_id,
+          product_name: item.product_name,
+          quantity: (current?.quantity ?? 0) + Number(item.quantity),
+        });
+      }
 
       setStats([
         { label: "مبيعات الشهر", value: money(salesThisMonth), note: "للطلبات التي تم تسليمها" },
@@ -419,12 +448,33 @@ function Dashboard() {
         { label: "طلبات جديدة", value: String(waitingCount), note: "تحتاج بدء المعالجة" },
         { label: "العملاء", value: String(customers.count ?? 0), note: "حسابات مسجلة" },
         { label: "المنتجات المنشورة", value: String(products.count ?? 0), note: "منتجات ظاهرة بالمتجر" },
-        { label: "خيارات منخفضة المخزون", value: String(lowStockVariants), note: "المخزون 3 قطع أو أقل" },
+        { label: "خيارات منخفضة المخزون", value: String(lowStockVariants), note: "3 قطع أو أقل، بما فيها النافد" },
         { label: "عروض سارية", value: String(promotions.count ?? 0), note: "عروض مفعّلة الآن" },
       ]);
       setStatusCounts(statusSummary);
       setRecentOrders((recent.data ?? []) as typeof recentOrders);
+      setBestSellers([...salesByProduct.values()].sort((a, b) => b.quantity - a.quantity).slice(0, 5));
+      setLowStock(((inventory.data ?? []) as {
+        id: string;
+        product_id: string;
+        size: string;
+        color: string;
+        stock: number;
+        product: { name: string } | { name: string }[];
+      }[]).map((variant) => ({
+        id: variant.id,
+        product_id: variant.product_id,
+        product_name: (Array.isArray(variant.product) ? variant.product[0]?.name : variant.product.name) ?? "منتج",
+        size: variant.size,
+        color: variant.color,
+        stock: variant.stock,
+      })));
       setLoading(false);
+      } catch (error) {
+        if (!active) return;
+        setError(`تعذر تحميل تقارير النظرة العامة: ${error instanceof Error ? error.message : "حدث خطأ غير معروف."}`);
+        setLoading(false);
+      }
     };
     void load();
     return () => { active = false; };
@@ -460,6 +510,35 @@ function Dashboard() {
           <Link to="/admin/orders">مراجعة الطلبات <span>›</span></Link>
           <Link to="/admin/products">إدارة المنتجات <span>›</span></Link>
           <Link to="/admin/promotions">إدارة العروض <span>›</span></Link>
+        </section>
+      </div>
+      <div className="dashboard-report-grid dashboard-insights-grid">
+        <section className="admin-card dashboard-insight-card">
+          <div className="dashboard-card-heading"><div><p className="eyebrow">الأكثر طلبًا</p><h2>أكثر المنتجات مبيعًا</h2></div></div>
+          {bestSellers.length ? (
+            <ol className="dashboard-best-sellers">
+              {bestSellers.map((item, index) => (
+                <li key={item.product_id || item.product_name}>
+                  <span>{index + 1}</span>
+                  {item.product_id ? <Link to="/admin/products">{item.product_name}</Link> : <b>{item.product_name}</b>}
+                  <strong>{item.quantity} قطعة</strong>
+                </li>
+              ))}
+            </ol>
+          ) : <p className="muted-copy">ستظهر المنتجات بعد تسليم الطلبات.</p>}
+        </section>
+        <section className="admin-card dashboard-insight-card">
+          <div className="dashboard-card-heading"><div><p className="eyebrow">متابعة المخزون</p><h2>مقاسات منخفضة المخزون</h2></div><Link to="/admin/products">إدارة المنتجات <span>←</span></Link></div>
+          {lowStock.length ? (
+            <div className="dashboard-inventory-list">
+              {lowStock.map((variant) => (
+                <div className={`dashboard-inventory-row${variant.stock === 0 ? " is-out-of-stock" : ""}`} key={variant.id}>
+                  <span><b>{variant.product_name}</b><small>{variant.color} · مقاس {variant.size}</small></span>
+                  <strong>{variant.stock === 0 ? "نفد" : `${variant.stock} متبقية`}</strong>
+                </div>
+              ))}
+            </div>
+          ) : <p className="muted-copy">لا توجد مقاسات منخفضة المخزون.</p>}
         </section>
       </div>
       <section className="admin-card dashboard-recent-orders">

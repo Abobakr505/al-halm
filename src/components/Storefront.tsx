@@ -9,12 +9,14 @@ import {
 import {
   Link,
   useNavigate,
+  useLocation,
   useParams,
   useSearchParams,
 } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowUpLeft,
+  BellRing,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -23,6 +25,7 @@ import {
   Instagram,
   Percent,
   Search,
+  Share2,
   ShoppingBag,
   Truck,
   X,
@@ -901,6 +904,9 @@ export function ProductDetailsPage() {
   const touchStartX = useRef<number | null>(null);
   const lastGallerySwipe = useRef(0);
   const navigate = useNavigate();
+  const location = useLocation();
+  const pendingStockAlert = location.state as { stockAlertVariantId?: string } | null;
+  const handledStockAlert = useRef("");
 
   useEffect(() => {
     if (!product) return;
@@ -990,6 +996,56 @@ export function ProductDetailsPage() {
     };
   }, [zoomOpen, product?.images?.length]);
 
+  const registerStockAlert = async (variantId: string) => {
+    if (!supabase) {
+      notify("إعدادات المتجر غير مكتملة، تعذر تسجيل التنبيه.");
+      return;
+    }
+    try {
+      const { data: userResult, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        notify(`تعذر التحقق من الحساب: ${userError.message}`);
+        return;
+      }
+      if (!userResult.user) {
+        navigate("/login", {
+          state: { from: location.pathname, stockAlertVariantId: variantId },
+        });
+        notify("سجلي الدخول لحفظ تنبيه توفر المقاس.");
+        return;
+      }
+
+      const { error } = await supabase.from("stock_alerts").upsert(
+        {
+          user_id: userResult.user.id,
+          variant_id: variantId,
+          created_at: new Date().toISOString(),
+          notified_at: null,
+        },
+        { onConflict: "user_id,variant_id" },
+      );
+      if (error) {
+        notify(`تعذر تسجيل تنبيه المخزون: ${error.message}`);
+        return;
+      }
+      notify("سنخبركِ عند توفر هذا المقاس في صفحة حسابك.");
+    } catch (error) {
+      notify(`تعذر تسجيل تنبيه المخزون: ${error instanceof Error ? error.message : "حدث خطأ غير معروف."}`);
+    }
+  };
+  useEffect(() => {
+    const variantId = pendingStockAlert?.stockAlertVariantId;
+    if (!variantId || !product || handledStockAlert.current === variantId) return;
+    handledStockAlert.current = variantId;
+    const variant = product.variants?.find((item) => item.id === variantId);
+    if (variant?.stock === 0) {
+      void registerStockAlert(variantId);
+    } else {
+      notify("أصبح هذا المقاس متوفرًا، يمكنكِ اختياره وطلبه الآن.");
+    }
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate, pendingStockAlert, product]);
+
   if (!isSupabaseConfigured)
     return (
       <InfoPage
@@ -1068,6 +1124,23 @@ export function ProductDetailsPage() {
     notify("تمت الإضافة إلى السلة.");
     navigate("/cart");
   };
+  const shareProduct = async () => {
+    const url = window.location.href;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: product.name, text: `شاهدي ${product.name}`, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      notify("تم نسخ رابط المنتج لمشاركته.");
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      notify(`تعذرت مشاركة الرابط: ${error instanceof Error ? error.message : "حاولي نسخ الرابط من المتصفح."}`);
+    }
+  };
+  const selectedVariant = product.variants?.find(
+    (item) => item.size === size && item.color === color,
+  );
   const images = product.images || [];
   const showImage = (index: number) =>
     setImageIndex((index + images.length) % images.length);
@@ -1311,6 +1384,16 @@ export function ProductDetailsPage() {
         <button className="button button-dark full-button" onClick={addToCart}>
           أضيفي إلى السلة <ShoppingBag size={17} />
         </button>
+        <div className="product-secondary-actions">
+          <button type="button" className="product-share-button" onClick={() => void shareProduct()}>
+            <Share2 size={16} /> مشاركة المنتج
+          </button>
+          {selectedVariant?.stock === 0 && (
+            <button type="button" className="product-restock-button" onClick={() => void registerStockAlert(selectedVariant.id)}>
+              <BellRing size={16} /> نبّهيني عند توفر المقاس
+            </button>
+          )}
+        </div>
         <div className="delivery-note">
           <Truck size={18} /> تُدفع رسوم التوصيل فقط عند الطلب، وقيمة المنتجات عند الاستلام.
         </div>
