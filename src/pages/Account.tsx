@@ -1,5 +1,6 @@
 
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, BadgeCheck, BellRing, CalendarDays, ExternalLink, Heart, LogOut, MapPin, PackageCheck, Sparkles, Trash2, Truck, Upload, UserRound } from 'lucide-react'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
@@ -709,7 +710,7 @@ if (address.address_line.trim().length < 10) {
             {message && <ToastMessage message={message} />}
           </div>
         </div>
-        {(logoutConfirm || addressToDelete) && <div className="admin-confirm-backdrop" onMouseDown={(event) => {
+        {(logoutConfirm || addressToDelete) && createPortal(<div className="admin-confirm-backdrop" onMouseDown={(event) => {
           if (event.target === event.currentTarget && !signingOut && !deletingAddress) {
             setLogoutConfirm(false)
             setAddressToDelete(null)
@@ -748,7 +749,7 @@ if (address.address_line.trim().length < 10) {
               </button>
             </div>
           </section>
-        </div>}
+        </div>, document.body)}
       </main>
     </AuthGate>
   )
