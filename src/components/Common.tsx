@@ -383,42 +383,61 @@ export function SiteFooter() {
     phone: string;
     email: string;
     instagram: string;
+    facebook: string;
+    tiktok: string;
   } | null>(null);
-  const [facebookUrl, setFacebookUrl] = useState("");
-  const [tiktokUrl, setTiktokUrl] = useState("");
+  const [contactLoading, setContactLoading] = useState(true);
+  const [contactError, setContactError] = useState(false);
   useEffect(() => {
-    if (!supabase) return;
-    supabase
-      .from("store_settings")
-      .select("contact_phone,contact_email,instagram_url")
-      .eq("id", true)
-      .single()
+    if (!supabase) {
+      setContactLoading(false);
+      return;
+    }
+    let active = true;
+    void Promise.resolve(
+      supabase
+        .from("store_settings")
+        .select("contact_phone,contact_email,instagram_url,facebook_url,tiktok_url")
+        .eq("id", true)
+        .maybeSingle(),
+    )
       .then(({ data, error }) => {
-        if (error)
+        if (!active) return;
+        if (error) {
           console.error("تعذر تحميل بيانات التواصل في التذييل:", error.message);
-        else
+          setContactError(true);
+        } else if (data) {
           setContact({
-            phone: data.contact_phone,
-            email: data.contact_email,
-            instagram: data.instagram_url,
+            phone: data.contact_phone || "",
+            email: data.contact_email || "",
+            instagram: data.instagram_url || "",
+            facebook: data.facebook_url || "",
+            tiktok: data.tiktok_url || "",
           });
-      });
-    supabase
-      .from("store_settings")
-      .select("facebook_url,tiktok_url")
-      .eq("id", true)
-      .single()
-      .then(({ data, error }) => {
-        if (error)
-          console.error(
-            "تعذر تحميل روابط فيسبوك وتيك توك. تحققي من تطبيق migration:",
-            error.message,
-          );
-        else {
-          setFacebookUrl(data.facebook_url);
-          setTiktokUrl(data.tiktok_url);
+        } else {
+          setContact({
+            phone: "",
+            email: "",
+            instagram: "",
+            facebook: "",
+            tiktok: "",
+          });
         }
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        console.error(
+          "تعذر تحميل بيانات التواصل في التذييل:",
+          error instanceof Error ? error.message : "حدث خطأ غير معروف.",
+        );
+        setContactError(true);
+      })
+      .finally(() => {
+        if (active) setContactLoading(false);
       });
+    return () => {
+      active = false;
+    };
   }, []);
   const whatsappNumber = contact?.phone
     .replace(/\D/g, "")
@@ -461,7 +480,7 @@ export function SiteFooter() {
           </div>
           <div>
             <b>تابعينا</b>
-            {(contact?.instagram || facebookUrl || tiktokUrl) && (
+            {(contact?.instagram || contact?.facebook || contact?.tiktok) && (
               <div className="social-links">
                 {contact?.instagram && (
                   <a
@@ -473,9 +492,9 @@ export function SiteFooter() {
                     <Instagram size={17} /> إنستغرام
                   </a>
                 )}
-                {facebookUrl && (
+                {contact?.facebook && (
                   <a
-                    href={facebookUrl}
+                    href={contact.facebook}
                     target="_blank"
                     rel="noreferrer"
                     aria-label="فيسبوك"
@@ -483,9 +502,9 @@ export function SiteFooter() {
                     <Facebook size={17} /> فيسبوك
                   </a>
                 )}
-                {tiktokUrl && (
+                {contact?.tiktok && (
                   <a
-                    href={tiktokUrl}
+                    href={contact.tiktok}
                     target="_blank"
                     rel="noreferrer"
                     aria-label="تيك توك"
@@ -499,12 +518,20 @@ export function SiteFooter() {
             {contact?.email && (
               <a href={`mailto:${contact.email}`}>{contact.email}</a>
             )}
-            {!contact?.instagram &&
-              !facebookUrl &&
-              !tiktokUrl &&
+            {contactLoading && (
+              <span className="muted-copy" role="status">جارٍ تحميل بيانات التواصل…</span>
+            )}
+            {!contactLoading && contactError && (
+              <span className="muted-copy" role="status">تعذر تحميل بيانات التواصل.</span>
+            )}
+            {!contactLoading &&
+              !contactError &&
+              !contact?.instagram &&
+              !contact?.facebook &&
+              !contact?.tiktok &&
               !contact?.phone &&
               !contact?.email && (
-                <span className="muted-copy">بيانات التواصل قريبًا</span>
+                <span className="muted-copy">لم تُضف بيانات التواصل بعد.</span>
               )}
           </div>
         </div>

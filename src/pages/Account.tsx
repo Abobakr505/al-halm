@@ -136,6 +136,7 @@ function AccountNavigation({ active }: { active: string }) {
 
 export function AccountPage() {
   const notify = useToast()
+  const navigate = useNavigate()
   const [profile, setProfile] = useState({
     email: '',
     full_name: '',
@@ -452,6 +453,7 @@ if (address.address_line.trim().length < 10) {
       if (error) throw error
       notify('تم تسجيل الخروج بنجاح.')
       setLogoutConfirm(false)
+      navigate('/login', { replace: true })
     } catch (error) {
       setSigningOut(false)
       setMessage(`تعذر تسجيل الخروج: ${error instanceof Error ? error.message : 'حدث خطأ غير معروف.'}`)

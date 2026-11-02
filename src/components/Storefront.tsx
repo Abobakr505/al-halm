@@ -117,22 +117,28 @@ export function HomePage() {
   const promotionNow = usePromotionClock();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-const [socialLinks, setSocialLinks] = useState<{
-  instagram: string;
-  facebook: string;
-  tiktok: string;
-}>({
-  instagram: "",
-  facebook: "",
-  tiktok: "",
-});
+  const [contentLoading, setContentLoading] = useState(true);
+  const [productsError, setProductsError] = useState("");
+  const [categoriesError, setCategoriesError] = useState("");
+  const [socialLinks, setSocialLinks] = useState<{
+    instagram: string;
+    facebook: string;
+    tiktok: string;
+  }>({
+    instagram: "",
+    facebook: "",
+    tiktok: "",
+  });
   const [promotions, setPromotions] = useState<
     (Promotion & { category_id: string })[]
   >([]);
   const [promotionError, setPromotionError] = useState("");
 
   useEffect(() => {
-    if (!supabase) return;
+    if (!supabase) {
+      setContentLoading(false);
+      return;
+    }
     let active = true;
     Promise.all([
       supabase
@@ -168,10 +174,12 @@ const [socialLinks, setSocialLinks] = useState<{
           "تعذر تحميل المنتجات المميزة:",
           productResult.error.message,
         );
+      if (productResult.error) setProductsError(productResult.error.message);
       else setProducts(((productResult.data ?? []) as Product[]).map(normalizeProductCategory));
-      if (categoryResult.error)
+      if (categoryResult.error) {
         console.error("تعذر تحميل الأقسام:", categoryResult.error.message);
-      else setCategories(categoryResult.data ?? []);
+        setCategoriesError(categoryResult.error.message);
+      } else setCategories(categoryResult.data ?? []);
       if (promotionResult.error) {
         console.error("تعذر تحميل العروض:", promotionResult.error.message);
         setPromotionError(promotionResult.error.message);
@@ -184,15 +192,30 @@ const [socialLinks, setSocialLinks] = useState<{
         );
       }
       if (settingsResult.error) {
-        console.error("تعذر تحميل روابط التواصل للرئيسية:", settingsResult.error.message);
+        console.error(
+          "تعذر تحميل روابط التواصل للرئيسية:",
+          settingsResult.error.message,
+        );
       } else {
         setSocialLinks({
-  instagram: settingsResult.data?.instagram_url || "",
-  facebook: settingsResult.data?.facebook_url || "",
-  tiktok: settingsResult.data?.tiktok_url || "",
-});
+          instagram: settingsResult.data?.instagram_url || "",
+          facebook: settingsResult.data?.facebook_url || "",
+          tiktok: settingsResult.data?.tiktok_url || "",
+        });
       }
-    });
+    })
+      .catch((error: unknown) => {
+        if (!active) return;
+        const message =
+          error instanceof Error ? error.message : "حدث خطأ غير معروف.";
+        console.error("تعذر تحميل محتوى الصفحة الرئيسية:", message);
+        setProductsError(message);
+        setCategoriesError(message);
+        setPromotionError(message);
+      })
+      .finally(() => {
+        if (active) setContentLoading(false);
+      });
     return () => {
       active = false;
     };
@@ -281,7 +304,11 @@ const [socialLinks, setSocialLinks] = useState<{
             action="/products"
             actionText="كل العبايات"
           />
-          {promotions.length > 0 ? (
+          {contentLoading ? (
+            <div className="promotion-grid" role="status" aria-label="جارٍ تحميل العروض">
+              {[1, 2, 3].map((item) => <div className="skeleton" key={item} />)}
+            </div>
+          ) : promotions.length > 0 ? (
             <div className="promotion-grid">
               {promotions.filter((promotion) => isPromotionActive(promotion, promotionNow)).map((promotion) => {
                 const category = categories.find(
@@ -335,7 +362,16 @@ const [socialLinks, setSocialLinks] = useState<{
           action="/categories"
           actionText="كل الأقسام"
         />
-        {categories.length ? (
+        {contentLoading ? (
+          <div className="categories-loading-grid" role="status" aria-label="جارٍ تحميل الأقسام">
+            {[1, 2, 3, 4].map((item) => <span key={item} />)}
+          </div>
+        ) : categoriesError ? (
+          <EmptyState
+            title="تعذر تحميل الأقسام"
+            message="حاولي مرة أخرى لاحقًا."
+          />
+        ) : categories.length ? (
           <div className="category-grid">
             {categories.slice(0, 4).map((category, index) => (
               <Link
@@ -366,7 +402,18 @@ const [socialLinks, setSocialLinks] = useState<{
           action="/products"
           actionText="تصفحي العبايات"
         />
-        <ProductGrid products={products} />
+        {contentLoading ? (
+          <div className="loading-grid" role="status" aria-label="جارٍ تحميل المنتجات">
+            {[1, 2, 3, 4].map((item) => <div className="skeleton" key={item} />)}
+          </div>
+        ) : productsError ? (
+          <EmptyState
+            title="تعذر تحميل المنتجات"
+            message="حاولي مرة أخرى لاحقًا."
+          />
+        ) : (
+          <ProductGrid products={products} />
+        )}
       </section>
       <section className="story-section" id="story">
         <div className="story-image">
